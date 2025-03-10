@@ -1041,8 +1041,8 @@ def reshape_and_cache(
     kv_cache_dtype: str,
     k_scale: torch.Tensor,
     v_scale: torch.Tensor,
-) -> None:
-    torch.ops._C_cache_ops.reshape_and_cache(key, value, key_cache,
+) -> (torch.Tensor, torch.Tensor):
+    return torch.ops._C_cache_ops.reshape_and_cache(key, value, key_cache,
                                              value_cache, slot_mapping,
                                              kv_cache_dtype, k_scale, v_scale)
 

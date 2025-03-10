@@ -104,7 +104,8 @@ void copy_blocks(std::vector<torch::Tensor> const& key_caches,
       });
 }
 
-void reshape_and_cache(torch::Tensor& key, torch::Tensor& value,
+std::tuple<torch::Tensor, torch::Tensor>
+reshape_and_cache(torch::Tensor& key, torch::Tensor& value,
                        torch::Tensor& key_cache, torch::Tensor& value_cache,
                        torch::Tensor& slot_mapping,
                        const std::string& kv_cache_dtype,
@@ -128,6 +129,10 @@ void reshape_and_cache(torch::Tensor& key, torch::Tensor& value,
             value_stride, num_heads, head_size, block_size, x);
         CPU_KERNEL_GUARD_OUT(reshape_and_cache_cpu_impl)
       });
+
+    // Rather than operating in-place only, produce new (cloned) tensors.
+    // This breaks any alias annotations and produces a functional output.
+    return std::make_tuple(key_cache.clone(), value_cache.clone());
 }
 
 void swap_blocks(torch::Tensor& src, torch::Tensor& dst,

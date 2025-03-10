@@ -18,7 +18,8 @@ void copy_blocks(std::vector<torch::Tensor> const& key_caches,
 void copy_blocks_mla(std::vector<torch::Tensor> const& kv_caches,
                      const torch::Tensor& block_mapping);
 
-void reshape_and_cache(torch::Tensor& key, torch::Tensor& value,
+std::tuple<torch::Tensor, torch::Tensor>
+reshape_and_cache(torch::Tensor& key, torch::Tensor& value,
                        torch::Tensor& key_cache, torch::Tensor& value_cache,
                        torch::Tensor& slot_mapping,
                        const std::string& kv_cache_dtype,

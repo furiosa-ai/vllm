@@ -145,10 +145,10 @@ TORCH_LIBRARY_EXPAND(CONCAT(TORCH_EXTENSION_NAME, _cache_ops), cache_ops) {
   // Reshape the key and value tensors and cache them.
   cache_ops.def(
       "reshape_and_cache(Tensor key, Tensor value,"
-      "                  Tensor! key_cache, Tensor! value_cache,"
+      "                  Tensor key_cache, Tensor value_cache,"
       "                  Tensor slot_mapping,"
       "                  str kv_cache_dtype,"
-      "                  Tensor k_scale, Tensor v_scale) -> ()");
+      "                  Tensor k_scale, Tensor v_scale) -> (Tensor, Tensor)");
   cache_ops.impl("reshape_and_cache", torch::kCPU, &reshape_and_cache);
 }
 
