@@ -295,7 +295,7 @@ class TorchSDPAMetadataBuilder(AttentionMetadataBuilder[TorchSDPAMetadata]):
         prefill_query_lens = query_lens[0:input_data.num_prefills]
         slot_mapping = torch.tensor(input_data.slot_mapping,
                                     dtype=torch.long,
-                                    device="cpu")
+                                    device="rngd:8")
 
         # For chunked-prefill
         if self.chunked_prefill and input_data.num_prefill_tokens != 0:
@@ -303,20 +303,20 @@ class TorchSDPAMetadataBuilder(AttentionMetadataBuilder[TorchSDPAMetadata]):
                 self.input_data.prefill_block_tables,
                 pad=0,
                 dtype=torch.int32,
-                device="cpu",
+                device="rngd:8",
             )
             query_lens_tensor = torch.tensor(prefill_query_lens,
                                              dtype=torch.int32,
-                                             device="cpu")
+                                             device="rngd:8")
             kv_lens_tensor = torch.tensor(prefill_seq_lens,
                                           dtype=torch.int32,
-                                          device="cpu")
+                                          device="rngd:8")
             query_start_loc = torch.zeros(input_data.num_prefills + 1,
                                           dtype=torch.int32,
-                                          device="cpu")
+                                          device="rngd:8")
             kv_start_loc = torch.zeros(input_data.num_prefills + 1,
                                        dtype=torch.int32,
-                                       device="cpu")
+                                       device="rngd:8")
             torch.cumsum(query_lens_tensor,
                          dim=0,
                          dtype=torch.int32,
@@ -339,20 +339,20 @@ class TorchSDPAMetadataBuilder(AttentionMetadataBuilder[TorchSDPAMetadata]):
             seq_lens_tensor = torch.tensor(
                 input_data.seq_lens[input_data.num_prefills:],
                 dtype=torch.int32,
-                device="cpu",
+                device="rngd:8",
             )
             block_tables = make_tensor_with_pad(
                 self.input_data.decode_block_tables,
                 pad=0,
                 dtype=torch.int32,
-                device="cpu",
+                device="rngd:8",
             )
         else:
             block_tables = torch.tensor([])
             seq_lens_tensor = torch.tensor(
                 input_data.seq_lens[:input_data.num_prefills],
                 dtype=torch.int32,
-                device="cpu",
+                device="rngd:8",
             )
 
         # For multi-modal models

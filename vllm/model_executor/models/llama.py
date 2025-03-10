@@ -320,7 +320,7 @@ class LlamaModel(nn.Module):
                 config.hidden_size,
                 org_num_embeddings=config.vocab_size,
                 quant_config=quant_config,
-            )
+            ).to('rngd:8')
         else:
             self.embed_tokens = PPMissingLayer()
         self.start_layer, self.end_layer, self.layers = make_layers(
