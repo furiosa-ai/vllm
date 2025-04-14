@@ -54,7 +54,7 @@ from benchmark_dataset import (AIMODataset, BurstGPTDataset,
                                ConversationDataset, HuggingFaceDataset,
                                InstructCoderDataset, RandomDataset,
                                SampleRequest, ShareGPTDataset, SonnetDataset,
-                               VisionArenaDataset)
+                               VisionArenaDataset, FixedIODataset)
 from benchmark_utils import convert_to_pytorch_benchmark_format, write_to_json
 
 MILLISECONDS_TO_SECONDS_CONVERSION = 1000
@@ -648,6 +648,15 @@ def main(args: argparse.Namespace):
                 input_len=args.random_input_len,
                 output_len=args.random_output_len,
                 range_ratio=args.random_range_ratio,
+            ),
+            "fixed":
+            lambda: FixedIODataset().sample(
+                tokenizer=tokenizer,
+                num_requests=args.num_prompts,
+                prefix_len=args.random_prefix_len,
+                input_len=args.random_input_len,
+                output_len=args.random_output_len,
+                range_ratio=args.random_range_ratio,
             )
         }
 
@@ -789,7 +798,7 @@ if __name__ == "__main__":
         "--dataset-name",
         type=str,
         default="sharegpt",
-        choices=["sharegpt", "burstgpt", "sonnet", "random", "hf"],
+        choices=["sharegpt", "burstgpt", "sonnet", "random", "hf", "fixed"],
         help="Name of the dataset to benchmark on.",
     )
     parser.add_argument("--dataset-path",

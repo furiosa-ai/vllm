@@ -815,3 +815,64 @@ class AIMODataset(HuggingFaceDataset):
                 ))
         self.maybe_oversample_requests(sampled_requests, num_requests)
         return sampled_requests
+
+
+class FixedIODataset(BenchmarkDataset):
+    """
+    dataset that tries to guarantee fixed input and output length.
+    """
+    DEFAULT_PREFIX_LEN = 0
+    DEFAULT_RANGE_RATIO = 0.0
+    DEFAULT_INPUT_LEN = 1024
+    DEFAULT_OUTPUT_LEN = 128
+
+    def __init__(
+        self,
+        **kwargs,
+    ) -> None:
+        super().__init__(**kwargs)
+
+    def sample(
+        self,
+        tokenizer: PreTrainedTokenizerBase,
+        num_requests: int,
+        prefix_len: int = DEFAULT_PREFIX_LEN,
+        range_ratio: float = DEFAULT_RANGE_RATIO,
+        input_len: int = DEFAULT_INPUT_LEN,
+        output_len: int = DEFAULT_OUTPUT_LEN,
+        **kwargs,
+    ) -> list[SampleRequest]:
+        # Enforce range_ratio < 1
+        assert range_ratio < 1.0, (
+            "random_range_ratio must be < 1.0 to ensure a valid sampling range"
+        )
+
+        # New sampling logic: [X * (1 - b), X * (1 + b)]
+        input_low = int(input_len * (1 - range_ratio))
+        input_high = int(input_len * (1 + range_ratio))
+        output_low = int(output_len * (1 - range_ratio))
+        output_high = int(output_len * (1 + range_ratio))
+
+        # Add logging for debugging
+        logger.info("Sampling input_len from [%s, %s]", input_low, input_high)
+        logger.info("Sampling output_len from [%s, %s]", output_low,
+                    output_high)
+
+        input_lens = np.random.randint(input_low,
+                                       input_high + 1,
+                                       size=num_requests)
+        output_lens = np.random.randint(output_low,
+                                        output_high + 1,
+                                        size=num_requests)
+        requests = []
+        prompt_stream = tokenizer.encode("0101010101010101" * (prefix_len + input_high), add_special_tokens=False)
+        for i in range(num_requests):
+            prompt_len = int(input_lens[i]) + prefix_len
+            prompt = prompt_stream[:prompt_len]
+            requests.append(
+                SampleRequest(
+                    prompt=prompt,
+                    prompt_len=prompt_len,
+                    expected_output_len=int(output_lens[i]),
+                ))
+        return requests
