@@ -32,10 +32,17 @@ from datasets import load_dataset
 from PIL import Image
 from transformers import PreTrainedTokenizerBase
 
-from vllm.lora.request import LoRARequest
-from vllm.lora.utils import get_adapter_absolute_path
-from vllm.multimodal import MultiModalDataDict
-from vllm.transformers_utils.tokenizer import AnyTokenizer, get_lora_tokenizer
+# CODE FIXED TO SKIP VLLM INSTALLATION
+# from vllm.lora.request import LoRARequest
+# from vllm.lora.utils import get_adapter_absolute_path
+# from vllm.multimodal import MultiModalDataDict
+# from vllm.transformers_utils.tokenizer import AnyTokenizer, get_lora_tokenizer
+LoRARequest = Any
+MultiModalDataDict = Any
+AnyTokenizer = Any
+def _raise_import_error(*args, **kwargs):
+    raise ImportError("vllm installation is required for this module.")
+get_adapter_absolute_path = get_lora_tokenizer = _raise_import_error
 
 logger = logging.getLogger(__name__)
 

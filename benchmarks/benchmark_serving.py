@@ -41,12 +41,16 @@ from tqdm.asyncio import tqdm
 from transformers import PreTrainedTokenizerBase
 
 try:
-    from vllm.transformers_utils.tokenizer import get_tokenizer
+    # CODE FIXED TO SKIP VLLM INSTALLATION
+    # from vllm.transformers_utils.tokenizer import get_tokenizer
+    raise ImportError
 except ImportError:
     from backend_request_func import get_tokenizer
 
 try:
-    from vllm.utils import FlexibleArgumentParser
+    # CODE FIXED TO SKIP VLLM INSTALLATION
+    # from vllm.utils import FlexibleArgumentParser
+    raise ImportError
 except ImportError:
     from argparse import ArgumentParser as FlexibleArgumentParser
 
