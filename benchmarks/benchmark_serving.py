@@ -435,6 +435,7 @@ async def benchmark(
         metrics.request_goodput if goodput_config_dict else None,
         "output_throughput": metrics.output_throughput,
         "total_token_throughput": metrics.total_token_throughput,
+        "inputs": [output.prompt for output in outputs],
         "input_lens": [output.prompt_len for output in outputs],
         "output_lens": actual_output_lens,
         "ttfts": [output.ttft for output in outputs],
@@ -746,7 +747,7 @@ def main(args: argparse.Namespace):
             # Remove fields with too many data points
             for field in [
                     "input_lens", "output_lens", "ttfts", "itls",
-                    "generated_texts", "errors"
+                    "generated_texts", "errors", "inputs"
             ]:
                 if field in benchmark_result:
                     del benchmark_result[field]
