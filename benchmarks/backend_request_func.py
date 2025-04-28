@@ -49,7 +49,6 @@ class RequestFuncOutput:
     prompt: Optional[str] = None
 
 
-
 async def async_request_tgi(
     request_func_input: RequestFuncInput,
     pbar: Optional[tqdm] = None,
