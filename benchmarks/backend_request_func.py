@@ -46,7 +46,7 @@ class RequestFuncOutput:
     tpot: float = 0.0  # avg next-token latencies
     prompt_len: int = 0
     error: str = ""
-    prompt: Optional[str] = None
+    prompt: str = ""
 
 
 async def async_request_tgi(
