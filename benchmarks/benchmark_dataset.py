@@ -439,7 +439,6 @@ class ShareGPTDataset(BenchmarkDataset):
                 scaled_prompt_ids = prompt_ids * repeat_factor + prompt_ids[:remainder]
                 prompt = tokenizer.decode(scaled_prompt_ids, skip_special_tokens=True)
                 prompt_len = len(scaled_prompt_ids)
-                print(f"original prompt len {original_prompt_len}, new prompt len {prompt_len}")
 
             if enable_multimodal_chat:
                 prompt = self.apply_multimodal_chat_transformation(
