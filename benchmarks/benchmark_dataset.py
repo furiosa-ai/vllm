@@ -372,6 +372,7 @@ class ShareGPTDataset(BenchmarkDataset):
     """
 
     def __init__(self, **kwargs) -> None:
+        self.prompt_scaling_factor = kwargs.pop("prompt_scaling_factor")
         super().__init__(**kwargs)
         self.load_data()
 
@@ -400,6 +401,7 @@ class ShareGPTDataset(BenchmarkDataset):
         **kwargs,
     ) -> list:
         samples: list = []
+
         for entry in self.data:
             if len(samples) >= num_requests:
                 break
@@ -413,6 +415,7 @@ class ShareGPTDataset(BenchmarkDataset):
             prompt_ids = tokenizer(prompt).input_ids
             completion_ids = tokenizer(completion).input_ids
             prompt_len = len(prompt_ids)
+
             new_output_len = (len(completion_ids)
                               if output_len is None else output_len)
             if not is_valid_sequence(prompt_len,
@@ -420,6 +423,24 @@ class ShareGPTDataset(BenchmarkDataset):
                                      skip_min_output_len_check=output_len
                                      is not None):
                 continue
+
+
+            if self.prompt_scaling_factor:
+                original_prompt_len = len(prompt_ids)
+                max_orig_prompt_len = 1024 # hardcoded value
+                target_max_prompt_len = self.prompt_scaling_factor
+
+                scaling_ratio = target_max_prompt_len / max_orig_prompt_len
+                target_prompt_len = int(original_prompt_len * scaling_ratio)
+
+                repeat_factor = target_prompt_len // original_prompt_len
+                remainder = target_prompt_len % original_prompt_len
+
+                scaled_prompt_ids = prompt_ids * repeat_factor + prompt_ids[:remainder]
+                prompt = tokenizer.decode(scaled_prompt_ids, skip_special_tokens=True)
+                prompt_len = len(scaled_prompt_ids)
+                print(f"original prompt len {original_prompt_len}, new prompt len {prompt_len}")
+
             if enable_multimodal_chat:
                 prompt = self.apply_multimodal_chat_transformation(
                     prompt, None)
