@@ -372,7 +372,7 @@ class ShareGPTDataset(BenchmarkDataset):
     """
 
     def __init__(self, **kwargs) -> None:
-        self.target_max_prompt_len = kwargs.pop("target_max_prompt_len")
+        self.target_max_prompt_len = kwargs.pop("target_max_prompt_len", None)
         super().__init__(**kwargs)
         self.load_data()
 
@@ -401,7 +401,6 @@ class ShareGPTDataset(BenchmarkDataset):
         **kwargs,
     ) -> list:
         samples: list = []
-
         for entry in self.data:
             if len(samples) >= num_requests:
                 break
@@ -415,7 +414,6 @@ class ShareGPTDataset(BenchmarkDataset):
             prompt_ids = tokenizer(prompt).input_ids
             completion_ids = tokenizer(completion).input_ids
             prompt_len = len(prompt_ids)
-
             new_output_len = (len(completion_ids)
                               if output_len is None else output_len)
             if not is_valid_sequence(prompt_len,
@@ -423,7 +421,6 @@ class ShareGPTDataset(BenchmarkDataset):
                                      skip_min_output_len_check=output_len
                                      is not None):
                 continue
-
 
             if self.target_max_prompt_len:
                 scaling_ratio = self.target_max_prompt_len / 1024 # 1024 is default max_prompt_len value of is_valid_sequence
