@@ -423,7 +423,7 @@ class ShareGPTDataset(BenchmarkDataset):
                 continue
 
             if self.target_max_prompt_len:
-                scaling_ratio = self.target_max_prompt_len / 1024 # 1024 is default max_prompt_len value of is_valid_sequence
+                scaling_ratio = self.target_max_prompt_len // 1024 # 1024 is default max_prompt_len value of is_valid_sequence
                 scaled_prompt_ids = prompt_ids * scaling_ratio
                 prompt = tokenizer.decode(scaled_prompt_ids, skip_special_tokens=True)
                 prompt_len = len(scaled_prompt_ids)
