@@ -372,7 +372,7 @@ class ShareGPTDataset(BenchmarkDataset):
     """
 
     def __init__(self, **kwargs) -> None:
-        self.prompt_scaling_factor = kwargs.pop("prompt_scaling_factor")
+        self.target_max_prompt_len = kwargs.pop("target_max_prompt_len")
         super().__init__(**kwargs)
         self.load_data()
 
@@ -425,10 +425,10 @@ class ShareGPTDataset(BenchmarkDataset):
                 continue
 
 
-            if self.prompt_scaling_factor:
+            if self.target_max_prompt_len:
                 original_prompt_len = len(prompt_ids)
                 max_orig_prompt_len = 1024 # hardcoded value
-                target_max_prompt_len = self.prompt_scaling_factor
+                target_max_prompt_len = self.target_max_prompt_len
 
                 scaling_ratio = target_max_prompt_len / max_orig_prompt_len
                 target_prompt_len = int(original_prompt_len * scaling_ratio)

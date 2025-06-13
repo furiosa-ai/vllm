@@ -637,7 +637,7 @@ def main(args: argparse.Namespace):
             "sharegpt":
             lambda: ShareGPTDataset(random_seed=args.seed,
                                     dataset_path=args.dataset_path,
-                                    prompt_scaling_factor=args.prompt_scaling_factor).sample(
+                                    target_max_prompt_len=args.target_max_prompt_len).sample(
                                         tokenizer=tokenizer,
                                         num_requests=args.num_prompts,
                                         output_len=args.sharegpt_output_len,
@@ -1099,10 +1099,10 @@ if __name__ == "__main__":
                         "script chooses a LoRA module at random.")
 
 
-    parser.add_argument("--prompt-scaling-factor",
+    parser.add_argument("--target-max-prompt-len",
                         type=int,
                         default=None,
-                        help="A value used to repeat the prompt")
+                        help="A value used to scale prompt up to")
 
 
     args = parser.parse_args()
