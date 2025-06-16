@@ -372,6 +372,7 @@ class ShareGPTDataset(BenchmarkDataset):
     """
 
     def __init__(self, **kwargs) -> None:
+        self.target_max_prompt_len = kwargs.pop("target_max_prompt_len", None)
         super().__init__(**kwargs)
         self.load_data()
 
@@ -420,6 +421,13 @@ class ShareGPTDataset(BenchmarkDataset):
                                      skip_min_output_len_check=output_len
                                      is not None):
                 continue
+
+            if self.target_max_prompt_len:
+                scaling_ratio = self.target_max_prompt_len // 1024 # 1024 is default max_prompt_len value of is_valid_sequence
+                scaled_prompt_ids = prompt_ids * scaling_ratio
+                prompt = tokenizer.decode(scaled_prompt_ids, skip_special_tokens=True)
+                prompt_len = len(scaled_prompt_ids)
+
             if enable_multimodal_chat:
                 prompt = self.apply_multimodal_chat_transformation(
                     prompt, None)

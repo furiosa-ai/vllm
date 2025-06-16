@@ -636,7 +636,8 @@ def main(args: argparse.Namespace):
         dataset_mapping = {
             "sharegpt":
             lambda: ShareGPTDataset(random_seed=args.seed,
-                                    dataset_path=args.dataset_path).sample(
+                                    dataset_path=args.dataset_path,
+                                    target_max_prompt_len=args.target_max_prompt_len).sample(
                                         tokenizer=tokenizer,
                                         num_requests=args.num_prompts,
                                         output_len=args.sharegpt_output_len,
@@ -1096,6 +1097,13 @@ if __name__ == "__main__":
                         help="A subset of LoRA module names passed in when "
                         "launching the server. For each request, the "
                         "script chooses a LoRA module at random.")
+
+
+    parser.add_argument("--target-max-prompt-len",
+                        type=int,
+                        default=None,
+                        help="A value used to scale prompt up to")
+
 
     args = parser.parse_args()
 
