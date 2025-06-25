@@ -32,6 +32,7 @@ from collections.abc import AsyncGenerator, Iterable
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Optional
+from multiprocessing import Process, Queue
 
 import numpy as np
 from backend_request_func import (ASYNC_REQUEST_FUNCS,
@@ -60,9 +61,10 @@ from benchmark_dataset import (AIMODataset, BurstGPTDataset,
                                SampleRequest, ShareGPTDataset, SonnetDataset,
                                VisionArenaDataset, FixedIODataset)
 from benchmark_utils import convert_to_pytorch_benchmark_format, write_to_json
+from monitor_power import monitor_npu_power_usage, calculate_avg_power_usage
 
 MILLISECONDS_TO_SECONDS_CONVERSION = 1000
-
+os.environ["TOKENIZERS_PARALLELISM"] = "true"
 
 @dataclass
 class BenchmarkMetrics:
@@ -92,6 +94,8 @@ class BenchmarkMetrics:
     median_e2el_ms: float
     std_e2el_ms: float
     percentiles_e2el_ms: list[tuple[float, float]]
+    avg_power_usage: float
+    power_efficiency: float
 
 
 async def get_request(
@@ -146,6 +150,7 @@ def calculate_metrics(
     selected_percentile_metrics: list[str],
     selected_percentiles: list[float],
     goodput_config_dict: dict[str, float],
+    power_monitor_dir: str,
 ) -> tuple[BenchmarkMetrics, list[int]]:
     actual_output_lens: list[int] = []
     total_input = 0
@@ -212,6 +217,9 @@ def calculate_metrics(
             "All requests failed. This is likely due to a misconfiguration "
             "on the benchmark arguments.",
             stacklevel=2)
+        
+    avg_power_usage = calculate_avg_power_usage(power_monitor_dir)
+
     metrics = BenchmarkMetrics(
         completed=completed,
         total_input=total_input,
@@ -241,6 +249,11 @@ def calculate_metrics(
         median_e2el_ms=np.median(e2els or 0) * 1000,
         percentiles_e2el_ms=[(p, np.percentile(e2els or 0, p) * 1000)
                              for p in selected_percentiles],
+        avg_power_usage=avg_power_usage,
+        power_efficiency=(
+            (sum(actual_output_lens) / dur_s)
+            / avg_power_usage
+        )
     )
 
     return metrics, actual_output_lens
@@ -352,51 +365,66 @@ async def benchmark(
             return await request_func(request_func_input=request_func_input,
                                       pbar=pbar)
 
-    benchmark_start_time = time.perf_counter()
-    tasks: list[asyncio.Task] = []
-    async for request in get_request(input_requests, request_rate, burstiness):
-        prompt, prompt_len, output_len, mm_content = request.prompt, \
-            request.prompt_len, request.expected_output_len, \
-                request.multi_modal_data
-        req_model_id, req_model_name = model_id, model_name
-        if lora_modules:
-            req_lora_module = next(lora_modules)
-            req_model_id, req_model_name = req_lora_module, req_lora_module
+    current_dt = datetime.now().strftime("%Y%m%d-%H%M%S")
+    power_monitor_dir = f"{args.result_dir}/device_status-{current_dt}.csv"
 
-        request_func_input = RequestFuncInput(model=req_model_id,
-                                              model_name=req_model_name,
-                                              prompt=prompt,
-                                              api_url=api_url,
-                                              prompt_len=prompt_len,
-                                              output_len=output_len,
-                                              logprobs=logprobs,
-                                              multi_modal_content=mm_content,
-                                              ignore_eos=ignore_eos,
-                                              extra_body=extra_body)
-        tasks.append(
-            asyncio.create_task(
-                limited_request_func(request_func_input=request_func_input,
-                                     pbar=pbar)))
-    outputs: list[RequestFuncOutput] = await asyncio.gather(*tasks)
+    stop_queue = Queue()
+    monitor_process = Process(
+        target=monitor_npu_power_usage,
+        args=(power_monitor_dir, stop_queue)
+    )
+    monitor_process.start()
 
-    if profile:
-        print("Stopping profiler...")
-        profile_input = RequestFuncInput(
-            model=model_id,
-            prompt=test_prompt,
-            api_url=base_url + "/stop_profile",
-            prompt_len=test_prompt_len,
-            output_len=test_output_len,
-            logprobs=logprobs,
-        )
-        profile_output = await request_func(request_func_input=profile_input)
-        if profile_output.success:
-            print("Profiler stopped")
+    try:
+        benchmark_start_time = time.perf_counter()
+        tasks: list[asyncio.Task] = []
+        async for request in get_request(input_requests, request_rate, burstiness):
+            prompt, prompt_len, output_len, mm_content = request.prompt, \
+                request.prompt_len, request.expected_output_len, \
+                    request.multi_modal_data
+            req_model_id, req_model_name = model_id, model_name
+            if lora_modules:
+                req_lora_module = next(lora_modules)
+                req_model_id, req_model_name = req_lora_module, req_lora_module
 
-    if pbar is not None:
-        pbar.close()
+            request_func_input = RequestFuncInput(model=req_model_id,
+                                                model_name=req_model_name,
+                                                prompt=prompt,
+                                                api_url=api_url,
+                                                prompt_len=prompt_len,
+                                                output_len=output_len,
+                                                logprobs=logprobs,
+                                                multi_modal_content=mm_content,
+                                                ignore_eos=ignore_eos,
+                                                extra_body=extra_body)
+            tasks.append(
+                asyncio.create_task(
+                    limited_request_func(request_func_input=request_func_input,
+                                        pbar=pbar)))
+        outputs: list[RequestFuncOutput] = await asyncio.gather(*tasks)
 
-    benchmark_duration = time.perf_counter() - benchmark_start_time
+        if profile:
+            print("Stopping profiler...")
+            profile_input = RequestFuncInput(
+                model=model_id,
+                prompt=test_prompt,
+                api_url=base_url + "/stop_profile",
+                prompt_len=test_prompt_len,
+                output_len=test_output_len,
+                logprobs=logprobs,
+            )
+            profile_output = await request_func(request_func_input=profile_input)
+            if profile_output.success:
+                print("Profiler stopped")
+
+        if pbar is not None:
+            pbar.close()
+
+        benchmark_duration = time.perf_counter() - benchmark_start_time
+
+    finally:
+        stop_queue.put("stop")
+        monitor_process.join()
 
     metrics, actual_output_lens = calculate_metrics(
         input_requests=input_requests,
@@ -406,7 +434,9 @@ async def benchmark(
         selected_percentile_metrics=selected_percentile_metrics,
         selected_percentiles=selected_percentiles,
         goodput_config_dict=goodput_config_dict,
+        power_monitor_dir=power_monitor_dir,
     )
+    
 
     print("{s:{c}^{n}}".format(s=' Serving Benchmark Result ', n=50, c='='))
     print("{:<40} {:<10}".format("Successful requests:", metrics.completed))
@@ -440,6 +470,8 @@ async def benchmark(
         "output_lens": actual_output_lens,
         "ttfts": [output.ttft for output in outputs],
         "itls": [output.itl for output in outputs],
+        "avg_power_usage": metrics.avg_power_usage,
+        "power_efficiency": metrics.power_efficiency,
         "generated_texts": [output.generated_text for output in outputs],
         "errors": [output.error for output in outputs],
     }
@@ -481,6 +513,10 @@ async def benchmark(
                        "Time per Output Token (excl. 1st token)")
     process_one_metric("itl", "ITL", "Inter-token Latency")
     process_one_metric("e2el", "E2EL", "End-to-end Latency")
+
+    print("{s:{c}^{n}}".format(s="Power Efficiency", n=50, c="-"))
+    print("{:<40} {:<10.2f}".format(f"Power Efficiency (TPS/W):", result["power_efficiency"]))
+    print("{:<40} {:<10.2f}".format(f"Average Power Usage (W):", result["avg_power_usage"]))
 
     print("=" * 50)
 
@@ -528,7 +564,8 @@ def save_to_pytorch_benchmark_format(args: argparse.Namespace,
     metrics = [
         "median_ttft_ms", "mean_ttft_ms", "std_ttft_ms", "p99_ttft_ms",
         "mean_tpot_ms", "median_tpot_ms", "std_tpot_ms", "p99_tpot_ms",
-        "median_itl_ms", "mean_itl_ms", "std_itl_ms", "p99_itl_ms"
+        "median_itl_ms", "mean_itl_ms", "std_itl_ms", "p99_itl_ms",
+        "avg_power_usage", "power_efficiency",
     ]
     # These raw data might be useful, but they are rather big. They can be added
     # later if needed
