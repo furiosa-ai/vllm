@@ -92,6 +92,10 @@ class BenchmarkMetrics:
     median_e2el_ms: float
     std_e2el_ms: float
     percentiles_e2el_ms: list[tuple[float, float]]
+    mean_dtl_ms: float
+    median_dtl_ms: float
+    std_dtl_ms: float
+    percentiles_dtl_ms: list[tuple[float, float]]
 
 
 async def get_request(
@@ -155,6 +159,7 @@ def calculate_metrics(
     tpots: list[float] = []
     all_tpots: list[float] = []
     ttfts: list[float] = []
+    dtls: list[float] = []
     e2els: list[float] = []
     for i in range(len(outputs)):
         if outputs[i].success:
@@ -179,6 +184,7 @@ def calculate_metrics(
             # Note: if output_len <= 1, we regard tpot as 0 for goodput
             all_tpots.append(tpot)
             itls += outputs[i].itl
+            dtls += outputs[i].itl[1:]  # Exclude the first token
             ttfts.append(outputs[i].ttft)
             e2els.append(outputs[i].latency)
             completed += 1
@@ -241,6 +247,11 @@ def calculate_metrics(
         median_e2el_ms=np.median(e2els or 0) * 1000,
         percentiles_e2el_ms=[(p, np.percentile(e2els or 0, p) * 1000)
                              for p in selected_percentiles],
+        mean_dtl_ms=np.mean(dtls or 0) * 1000,
+        std_dtl_ms=np.std(dtls or 0) * 1000,
+        median_dtl_ms=np.median(dtls or 0) * 1000,
+        percentiles_dtl_ms=[(p, np.percentile(dtls or 0, p) * 1000)
+                            for p in selected_percentiles],
     )
 
     return metrics, actual_output_lens
@@ -440,6 +451,7 @@ async def benchmark(
         "output_lens": actual_output_lens,
         "ttfts": [output.ttft for output in outputs],
         "itls": [output.itl for output in outputs],
+        "dtls": [output.itl[1:] for output in outputs],
         "generated_texts": [output.generated_text for output in outputs],
         "errors": [output.error for output in outputs],
     }
@@ -480,6 +492,7 @@ async def benchmark(
     process_one_metric("tpot", "TPOT",
                        "Time per Output Token (excl. 1st token)")
     process_one_metric("itl", "ITL", "Inter-token Latency")
+    process_one_metric("dtl", "DTL", "Decode-token Latency")
     process_one_metric("e2el", "E2EL", "End-to-end Latency")
 
     print("=" * 50)
@@ -748,7 +761,7 @@ def main(args: argparse.Namespace):
             # Remove fields with too many data points
             for field in [
                     "input_lens", "output_lens", "ttfts", "itls",
-                    "generated_texts", "errors", "inputs"
+                    "generated_texts", "errors", "inputs", "dtls"
             ]:
                 if field in benchmark_result:
                     del benchmark_result[field]
