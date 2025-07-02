@@ -2,6 +2,8 @@ import subprocess
 import time
 from datetime import datetime, timezone
 from multiprocessing import Queue
+import pandas as pd
+import numpy as np
 
 
 def monitor_npu_power_usage(
@@ -44,22 +46,25 @@ def monitor_npu_power_usage(
 
 def calculate_avg_power_usage(power_log_path: str):
     try:
-        with open(power_log_path, "r") as csvfile:
-            lines = csvfile.readlines()[1:]
-            total_power = 0.0
-            count = 0
-            for line in lines:
-                parts = line.strip().split(",")
-                if len(parts) >= 4:
-                    power = float(parts[3])
-                    total_power += power
-                    count += 1
-            if count > 0:
-                avg_power = total_power / count
-                return avg_power
-            else:
-                print("No power data available.")
+        df = pd.read_csv(power_log_path)
+
+        if "device_name" not in df.columns or "power" not in df.columns:
+            print("Required columns are missing.")
+            return
+
+        device_group = df.groupby("device_name")["power"]
+        device_names = device_group.groups.keys()
+
+        devices_power = []
+        for device_name in device_names:
+            power_values = device_group.get_group(device_name).tolist()
+            devices_power.append(power_values)
+
+        avg_power = sum(np.mean(p) for p in devices_power)
+        return avg_power
+
     except FileNotFoundError:
         print("Power log file not found.")
     except Exception as e:
         print(f"Error calculating average power usage: {e}")
+        
