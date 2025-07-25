@@ -1001,6 +1001,107 @@ class AIMODataset(HuggingFaceDataset):
 
 
 # -----------------------------------------------------------------------------
+# Azure Dataset Implementation
+# -----------------------------------------------------------------------------
+
+
+class AzureDataset(BenchmarkDataset):
+    """
+    Azure Dataset.
+    https://github.com/Azure/AzurePublicDataset/blob/master/AzureLLMInferenceDataset2023.md
+
+    Implements the Azure dataset. Loads data from a csv file and generates
+    sample requrests based on the Azure dataset format. E.g.,
+    ```
+    TIMESTAMP,ContextTokens,GeneratedTokens
+    2023-11-16 18:17:03.9799600,4808,10
+    2023-11-16 18:17:04.0319600,3180,8
+    2023-11-16 18:17:04.0781490,110,27
+    ```
+    """
+
+    def __init__(self, **kwargs) -> None:
+        super().__init__(**kwargs)
+        self.load_data()
+
+    def load_data(self) -> None:
+        if self.dataset_path is None:
+            raise ValueError("dataset_path must be provided for loading data.")
+
+        self.data = []
+
+        # Load the CSV file
+        csv_data = pd.read_csv(self.dataset_path)
+
+        for _, row in csv_data.iterrows():
+            self.data.append(row.to_dict())
+
+        # Shuffle the data for randomness
+        random.seed(self.random_seed)
+        random.shuffle(self.data)
+
+    def sample(
+        self,
+        tokenizer: PreTrainedTokenizerBase,
+        num_requests: int,
+        start_time: Optional[str] = None,
+        end_time: Optional[str] = None,
+        **kwargs,
+    ) -> list:
+        # Filter traces with start/end time if needed
+        if start_time is not None:
+            self.data = [item for item in self.data if item["TIMESTAMP"] >= start_time]
+        if end_time is not None:
+            self.data = [item for item in self.data if item["TIMESTAMP"] <= end_time]
+
+        if num_requests > len(self.data):
+            logger.warning(
+                "Requested number of requests (%d) exceeds available data (%d). "
+                "Adjusting num_requests to %d.",
+                num_requests,
+                len(self.data),
+                len(self.data),
+            )
+
+        requests = []
+        vocab_size = tokenizer.vocab_size
+        for item in self.data:
+            if len(requests) >= num_requests:
+                break
+            prompt_len = item["ContextTokens"]
+            output_len = item["GeneratedTokens"]
+
+            prompt_token_ids = (
+                np.random.randint(0, vocab_size, size=prompt_len).tolist()
+                if prompt_len > 0
+                else []
+            )
+            prompt = tokenizer.decode(prompt_token_ids)
+            # After decoding the prompt we have to encode and decode it again.
+            # This is done because in some cases N consecutive tokens
+            # give a string tokenized into != N number of tokens.
+            # For example for GPT2Tokenizer:
+            # [6880, 6881] -> ['Ġcalls', 'here'] ->
+            # [1650, 939, 486] -> ['Ġcall', 'sh', 'ere']
+            # To avoid uncontrolled change of the prompt length,
+            # the encoded sequence is truncated before being decode again.
+            re_encoded_sequence = tokenizer.encode(prompt, add_special_tokens=False)[
+                :prompt_len
+            ]
+            prompt = tokenizer.decode(re_encoded_sequence)
+            requests.append(
+                SampleRequest(
+                    prompt=prompt,
+                    prompt_len=prompt_len,
+                    expected_output_len=output_len,
+                )
+            )
+        # skip oversample requests for Azure dataset
+        # as time period is already set, we assume oversample is not required.
+        return requests
+
+
+# -----------------------------------------------------------------------------
 # Next Edit Prediction Dataset Implementation
 # -----------------------------------------------------------------------------
 

@@ -59,6 +59,7 @@ except ImportError:
 from benchmark_dataset import (
     AIMODataset,
     ASRDataset,
+    AzureDataset,
     BurstGPTDataset,
     ConversationDataset,
     CustomDataset,
@@ -676,6 +677,16 @@ def main(args: argparse.Namespace):
                 tokenizer=tokenizer,
                 return_prompt_formatted=True,
             )
+    elif args.dataset_name == "azure":
+        dataset = AzureDataset(
+            dataset_path=args.dataset_path,
+        )
+        input_requests = dataset.sample(
+            num_requests=args.num_prompts,
+            tokenizer=tokenizer,
+            start_time=args.azure_start_time,
+            end_time=args.azure_end_time,
+        )
 
     elif args.dataset_name == "hf":
         # all following datasets are implemented from the
@@ -930,7 +941,15 @@ def create_argument_parser():
         "--dataset-name",
         type=str,
         default="sharegpt",
-        choices=["sharegpt", "burstgpt", "sonnet", "random", "hf", "custom"],
+        choices=[
+            "sharegpt",
+            "burstgpt",
+            "sonnet",
+            "random",
+            "hf",
+            "custom",
+            "azure",
+        ],
         help="Name of the dataset to benchmark on.",
     )
     parser.add_argument(
@@ -1182,7 +1201,19 @@ def create_argument_parser():
             "input_len * (1 + range_ratio)]."
         ),
     )
-
+    azure_group = parser.add_argument_group("azure dataset options")
+    azure_group.add_argument(
+        "--azure-start-time",
+        type=str,
+        default="2023-11-16 18:00:00",
+        help="start time of trace, used only for azure dataset.",
+    )
+    azure_group.add_argument(
+        "--azure-end-time",
+        type=str,
+        default="2023-11-16 20:00:00",
+        help="end time of trace, used only for azure dataset.",
+    )
     hf_group = parser.add_argument_group("hf dataset options")
     hf_group.add_argument(
         "--hf-subset", type=str, default=None, help="Subset of the HF dataset."
