@@ -153,6 +153,9 @@ async def get_request(
         request_rates.append(current_request_rate)
         if current_request_rate == float("inf"):
             delay_ts.append(0)
+        elif current_request_rate < 0:
+            # Use the time interval from the traces
+            delay_ts.append(request.time_interval)
         else:
             theta = 1.0 / (current_request_rate * burstiness)
 
@@ -173,8 +176,11 @@ async def get_request(
         # from the gamma distribution, their sum would have 1-2% gap 
         # from target_total_delay_s. The purpose of the following logic is to
         # close the gap for stablizing the throughput data 
-        # from different random seeds. 
-        target_total_delay_s = total_requests / request_rate
+        # from different random seeds.
+        # In case request_rate < 0, which represents a timestamp traces
+        # we use absolute value of request_rate to calculate the target
+        # total delay.
+        target_total_delay_s = total_requests / np.abs(request_rate)
         normalize_factor = target_total_delay_s / delay_ts[-1]
         delay_ts = [delay * normalize_factor for delay in delay_ts]
 

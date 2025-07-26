@@ -1014,6 +1014,8 @@ def create_argument_parser():
         default=float("inf"),
         help="Number of requests per second. If this is inf, "
         "then all the requests are sent at time 0. "
+        "If this is -1, then request arrivals are sent following a "
+        "timestamp from the dataset."
         "Otherwise, we use Poisson process or gamma distribution "
         "to synthesize the request arrival times.",
     )

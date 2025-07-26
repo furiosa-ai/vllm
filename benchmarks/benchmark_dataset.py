@@ -54,6 +54,7 @@ class SampleRequest:
     expected_output_len: int
     multi_modal_data: Optional[Union[MultiModalDataDict, dict]] = None
     lora_request: Optional[LoRARequest] = None
+    time_interval: Optional[float] = None
 
 
 # -----------------------------------------------------------------------------
@@ -1032,13 +1033,50 @@ class AzureDataset(BenchmarkDataset):
 
         # Load the CSV file
         csv_data = pd.read_csv(self.dataset_path)
-
+        self.interval_data = csv_data[["TIMESTAMP"]].copy()
         for _, row in csv_data.iterrows():
             self.data.append(row.to_dict())
 
         # Shuffle the data for randomness
         random.seed(self.random_seed)
         random.shuffle(self.data)
+
+    def _apply_time_filters(
+        self, start_time: Optional[str] = None, end_time: Optional[str] = None
+    ) -> None:
+        """
+        Filter the dataset based on start and end timestamps if needed.
+        """
+        if start_time is None and end_time is None:
+            return
+
+        if start_time is not None:
+            self.data = [item for item in self.data if item["TIMESTAMP"] >= start_time]
+            self.interval_data = self.interval_data[
+                self.interval_data["TIMESTAMP"] >= start_time
+            ]
+        if end_time is not None:
+            self.data = [item for item in self.data if item["TIMESTAMP"] <= end_time]
+            self.interval_data = self.interval_data[
+                self.interval_data["TIMESTAMP"] <= end_time
+            ]
+
+        assert len(self.data) == len(self.interval_data), (
+            "Data and interval data lengths do not match after filtering."
+        )
+
+    def _compute_time_intervals(self) -> list:
+        """
+        Compute the inter-request time based on the TIMESTAMP column.
+        This method modifies the interval_data DataFrame in place.
+        """
+        self.interval_data["TIMESTAMP"] = pd.to_datetime(
+            self.interval_data["TIMESTAMP"]
+        )
+        self.interval_data["time_interval"] = (
+            self.interval_data["TIMESTAMP"].diff().dt.total_seconds().fillna(0)
+        )
+        return self.interval_data["time_interval"].tolist()
 
     def sample(
         self,
@@ -1048,11 +1086,8 @@ class AzureDataset(BenchmarkDataset):
         end_time: Optional[str] = None,
         **kwargs,
     ) -> list:
-        # Filter traces with start/end time if needed
-        if start_time is not None:
-            self.data = [item for item in self.data if item["TIMESTAMP"] >= start_time]
-        if end_time is not None:
-            self.data = [item for item in self.data if item["TIMESTAMP"] <= end_time]
+        self._apply_time_filters(start_time, end_time)
+        interval_data = self._compute_time_intervals()
 
         if num_requests > len(self.data):
             logger.warning(
@@ -1065,12 +1100,12 @@ class AzureDataset(BenchmarkDataset):
 
         requests = []
         vocab_size = tokenizer.vocab_size
-        for item in self.data:
+        for idx, item in enumerate(self.data):
             if len(requests) >= num_requests:
                 break
             prompt_len = item["ContextTokens"]
             output_len = item["GeneratedTokens"]
-
+            time_interval = interval_data[idx]
             prompt_token_ids = (
                 np.random.randint(0, vocab_size, size=prompt_len).tolist()
                 if prompt_len > 0
@@ -1094,6 +1129,7 @@ class AzureDataset(BenchmarkDataset):
                     prompt=prompt,
                     prompt_len=prompt_len,
                     expected_output_len=output_len,
+                    time_interval=time_interval,
                 )
             )
         # skip oversample requests for Azure dataset
