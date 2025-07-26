@@ -54,6 +54,7 @@ class SampleRequest:
     expected_output_len: int
     multi_modal_data: Optional[Union[MultiModalDataDict, dict]] = None
     lora_request: Optional[LoRARequest] = None
+    time_interval: Optional[float] = None
 
 
 # -----------------------------------------------------------------------------
@@ -998,6 +999,142 @@ class AIMODataset(HuggingFaceDataset):
             )
         self.maybe_oversample_requests(sampled_requests, num_requests)
         return sampled_requests
+
+
+# -----------------------------------------------------------------------------
+# Azure Dataset Implementation
+# -----------------------------------------------------------------------------
+
+
+class AzureDataset(BenchmarkDataset):
+    """
+    Azure Dataset.
+    https://github.com/Azure/AzurePublicDataset/blob/master/AzureLLMInferenceDataset2023.md
+
+    Implements the Azure dataset. Loads data from a csv file and generates
+    sample requrests based on the Azure dataset format. E.g.,
+    ```
+    TIMESTAMP,ContextTokens,GeneratedTokens
+    2023-11-16 18:17:03.9799600,4808,10
+    2023-11-16 18:17:04.0319600,3180,8
+    2023-11-16 18:17:04.0781490,110,27
+    ```
+    """
+
+    def __init__(self, **kwargs) -> None:
+        super().__init__(**kwargs)
+        self.load_data()
+
+    def load_data(self) -> None:
+        if self.dataset_path is None:
+            raise ValueError("dataset_path must be provided for loading data.")
+
+        self.data = []
+
+        # Load the CSV file
+        csv_data = pd.read_csv(self.dataset_path)
+        self.interval_data = csv_data[["TIMESTAMP"]].copy()
+        for _, row in csv_data.iterrows():
+            self.data.append(row.to_dict())
+
+        # Shuffle the data for randomness
+        random.seed(self.random_seed)
+        random.shuffle(self.data)
+
+    def _apply_time_filters(
+        self, start_time: Optional[str] = None, end_time: Optional[str] = None
+    ) -> None:
+        """
+        Filter the dataset based on start and end timestamps if needed.
+        """
+        if start_time is None and end_time is None:
+            return
+
+        if start_time is not None:
+            self.data = [item for item in self.data if item["TIMESTAMP"] >= start_time]
+            self.interval_data = self.interval_data[
+                self.interval_data["TIMESTAMP"] >= start_time
+            ]
+        if end_time is not None:
+            self.data = [item for item in self.data if item["TIMESTAMP"] <= end_time]
+            self.interval_data = self.interval_data[
+                self.interval_data["TIMESTAMP"] <= end_time
+            ]
+
+        assert len(self.data) == len(self.interval_data), (
+            "Data and interval data lengths do not match after filtering."
+        )
+
+    def _compute_time_intervals(self) -> list:
+        """
+        Compute the inter-request time based on the TIMESTAMP column.
+        This method modifies the interval_data DataFrame in place.
+        """
+        self.interval_data["TIMESTAMP"] = pd.to_datetime(
+            self.interval_data["TIMESTAMP"]
+        )
+        self.interval_data["time_interval"] = (
+            self.interval_data["TIMESTAMP"].diff().dt.total_seconds().fillna(0)
+        )
+        return self.interval_data["time_interval"].tolist()
+
+    def sample(
+        self,
+        tokenizer: PreTrainedTokenizerBase,
+        num_requests: int,
+        start_time: Optional[str] = None,
+        end_time: Optional[str] = None,
+        **kwargs,
+    ) -> list:
+        self._apply_time_filters(start_time, end_time)
+        interval_data = self._compute_time_intervals()
+
+        if num_requests > len(self.data):
+            logger.warning(
+                "Requested number of requests (%d) exceeds available data (%d). "
+                "Adjusting num_requests to %d.",
+                num_requests,
+                len(self.data),
+                len(self.data),
+            )
+
+        requests = []
+        vocab_size = tokenizer.vocab_size
+        for idx, item in enumerate(self.data):
+            if len(requests) >= num_requests:
+                break
+            prompt_len = item["ContextTokens"]
+            output_len = item["GeneratedTokens"]
+            time_interval = interval_data[idx]
+            prompt_token_ids = (
+                np.random.randint(0, vocab_size, size=prompt_len).tolist()
+                if prompt_len > 0
+                else []
+            )
+            prompt = tokenizer.decode(prompt_token_ids)
+            # After decoding the prompt we have to encode and decode it again.
+            # This is done because in some cases N consecutive tokens
+            # give a string tokenized into != N number of tokens.
+            # For example for GPT2Tokenizer:
+            # [6880, 6881] -> ['Ġcalls', 'here'] ->
+            # [1650, 939, 486] -> ['Ġcall', 'sh', 'ere']
+            # To avoid uncontrolled change of the prompt length,
+            # the encoded sequence is truncated before being decode again.
+            re_encoded_sequence = tokenizer.encode(prompt, add_special_tokens=False)[
+                :prompt_len
+            ]
+            prompt = tokenizer.decode(re_encoded_sequence)
+            requests.append(
+                SampleRequest(
+                    prompt=prompt,
+                    prompt_len=prompt_len,
+                    expected_output_len=output_len,
+                    time_interval=time_interval,
+                )
+            )
+        # skip oversample requests for Azure dataset
+        # as time period is already set, we assume oversample is not required.
+        return requests
 
 
 # -----------------------------------------------------------------------------
