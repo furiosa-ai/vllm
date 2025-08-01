@@ -10,6 +10,7 @@ from typing import Optional, Union
 
 import aiohttp
 import huggingface_hub.constants
+from datetime import datetime, timezone
 from tqdm.asyncio import tqdm
 from transformers import (AutoTokenizer, PreTrainedTokenizer,
                           PreTrainedTokenizerFast)
@@ -47,6 +48,8 @@ class RequestFuncOutput:
     prompt_len: int = 0
     error: str = ""
     prompt: str = ""
+    initiated_timestamp: datetime = datetime.now()
+    completed_timestamp: datetime = datetime.now()
 
 
 async def async_request_tgi(
@@ -277,7 +280,8 @@ async def async_request_openai_completions(
         output = RequestFuncOutput()
         output.prompt_len = request_func_input.prompt_len
         output.prompt = request_func_input.prompt
-
+        output.initiated_timestamp = datetime.now(timezone.utc)
+        
         generated_text = ""
         st = time.perf_counter()
         most_recent_timestamp = st
@@ -329,6 +333,7 @@ async def async_request_openai_completions(
                             "This response will be marked as failed!")
                     output.generated_text = generated_text
                     output.latency = most_recent_timestamp - st
+                    output.completed_timestamp = datetime.now(timezone.utc)
                 else:
                     output.error = response.reason or ""
                     output.success = False
