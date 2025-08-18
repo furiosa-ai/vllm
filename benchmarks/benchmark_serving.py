@@ -62,7 +62,6 @@ from benchmark_dataset import (AIMODataset, BurstGPTDataset,
                                SampleRequest, ShareGPTDataset, SonnetDataset,
                                VisionArenaDataset, FixedIODataset)
 from benchmark_utils import convert_to_pytorch_benchmark_format, write_to_json
-from monitor_power import monitor_npu_power_usage, calculate_avg_power_usage
 
 MILLISECONDS_TO_SECONDS_CONVERSION = 1000
 os.environ["TOKENIZERS_PARALLELISM"] = "true"
@@ -282,12 +281,13 @@ def monitor_npu(
                 for device in devices:
                     device_name = f"rngd{device.device_info().index()}"
                     power_consumption = device.power_consumption()
+                    # RNGD utilization is the average of all PEs.
                     utilization = sum(
                         [
                             pe.pe_usage_percentage()
                             for pe in device.core_utilization().pe_utilization()
                         ]
-                    )
+                    ) / 8
                     temperature = device.device_temperature().soc_peak()
                     if utilization > 0.0:
                         file.write(
@@ -395,27 +395,7 @@ async def benchmark(
         raise ValueError(
             "Multi-modal content is only supported on 'openai-chat' backend.")
     assert test_mm_content is None or isinstance(test_mm_content, dict)
-    # test_input = RequestFuncInput(
-    #     model=model_id,
-    #     model_name=model_name,
-    #     prompt=test_prompt,
-    #     api_url=api_url,
-    #     prompt_len=test_prompt_len,
-    #     output_len=test_output_len,
-    #     logprobs=logprobs,
-    #     multi_modal_content=test_mm_content,
-    #     ignore_eos=ignore_eos,
-    #     extra_body=extra_body,
-    # )
-
-    # test_output = await request_func(request_func_input=test_input)
-    # if not test_output.success:
-    #     raise ValueError(
-    #         "Initial test run failed - Please make sure benchmark arguments "
-    #         f"are correctly specified. Error: {test_output.error}")
-    # else:
-    #     print("Initial test run completed. Starting main benchmark run...")
-
+    
     if lora_modules:
         # For each input request, choose a LoRA module at random.
         lora_modules = iter(
