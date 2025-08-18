@@ -6,11 +6,11 @@ import sys
 import time
 import traceback
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from typing import Optional, Union
 
 import aiohttp
 import huggingface_hub.constants
-from datetime import datetime, timezone
 from tqdm.asyncio import tqdm
 from transformers import (AutoTokenizer, PreTrainedTokenizer,
                           PreTrainedTokenizerFast)
@@ -281,7 +281,7 @@ async def async_request_openai_completions(
         output.prompt_len = request_func_input.prompt_len
         output.prompt = request_func_input.prompt
         output.initiated_timestamp = datetime.now(timezone.utc)
-        
+
         generated_text = ""
         st = time.perf_counter()
         most_recent_timestamp = st

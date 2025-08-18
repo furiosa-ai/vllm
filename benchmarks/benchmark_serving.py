@@ -30,10 +30,9 @@ import time
 import warnings
 from collections.abc import AsyncGenerator, Iterable
 from dataclasses import dataclass
-from datetime import datetime
-from typing import Any, Optional
 from datetime import datetime, timedelta, timezone
 from multiprocessing import Process, Queue
+from typing import Any, Optional
 
 import numpy as np
 from backend_request_func import (ASYNC_REQUEST_FUNCS,
@@ -57,15 +56,15 @@ except ImportError:
     from argparse import ArgumentParser as FlexibleArgumentParser
 
 from benchmark_dataset import (AIMODataset, BurstGPTDataset,
-                               ConversationDataset, HuggingFaceDataset,
-                               InstructCoderDataset, RandomDataset,
-                               SampleRequest, ShareGPTDataset, SonnetDataset,
-                               VisionArenaDataset, FixedIODataset)
+                               ConversationDataset, FixedIODataset,
+                               HuggingFaceDataset, InstructCoderDataset,
+                               RandomDataset, SampleRequest, ShareGPTDataset,
+                               SonnetDataset, VisionArenaDataset)
 from benchmark_utils import convert_to_pytorch_benchmark_format, write_to_json
-from monitor_power import monitor_npu_power_usage, calculate_avg_power_usage
 
 MILLISECONDS_TO_SECONDS_CONVERSION = 1000
 os.environ["TOKENIZERS_PARALLELISM"] = "true"
+
 
 @dataclass
 class BenchmarkMetrics:
@@ -221,7 +220,6 @@ def calculate_metrics(
             "All requests failed. This is likely due to a misconfiguration "
             "on the benchmark arguments.",
             stacklevel=2)
-        
 
     metrics = BenchmarkMetrics(
         completed=completed,
@@ -255,16 +253,18 @@ def calculate_metrics(
         mean_power_consumption=np.mean(power_consumptions or 0),
         std_power_consumption=np.std(power_consumptions or 0),
         median_power_consumption=np.median(power_consumptions or 0),
-        percentiles_power_consumption=[
-            (p, np.percentile(power_consumptions or 0, p)) for p in selected_percentiles
-        ],
+        percentiles_power_consumption=[(p,
+                                        np.percentile(power_consumptions or 0,
+                                                      p))
+                                       for p in selected_percentiles],
     )
 
     return metrics, actual_output_lens
 
-def monitor_npu(
-    save_file_path: str, process_queue: Queue = None, interval_ms: int = 500
-):
+
+def monitor_npu(save_file_path: str,
+                process_queue: Queue = None,
+                interval_ms: int = 500):
     try:
         from furiosa_smi_py import init, list_devices
 
@@ -275,19 +275,19 @@ def monitor_npu(
 
     try:
         with open(save_file_path, mode="a") as file:
-            file.write("timestamp,device,utilization,power_consumption,temperature\n")
+            file.write(
+                "timestamp,device,utilization,power_consumption,temperature\n")
             devices = list_devices()
             while process_queue.empty():
                 dt = datetime.now(timezone.utc).isoformat()
                 for device in devices:
                     device_name = f"rngd{device.device_info().index()}"
                     power_consumption = device.power_consumption()
-                    utilization = sum(
-                        [
-                            pe.pe_usage_percentage()
-                            for pe in device.core_utilization().pe_utilization()
-                        ]
-                    )
+                    # RNGD utilization is the average of all PEs.
+                    utilization = sum([
+                        pe.pe_usage_percentage()
+                        for pe in device.core_utilization().pe_utilization()
+                    ]) / 8
                     temperature = device.device_temperature().soc_peak()
                     if utilization > 0.0:
                         file.write(
@@ -299,14 +299,15 @@ def monitor_npu(
         print("Monitoring Stopped.")
 
 
-def monitor_gpu(
-    save_file_path: str, process_queue: Queue = None, interval_ms: int = 500
-):
+def monitor_gpu(save_file_path: str,
+                process_queue: Queue = None,
+                interval_ms: int = 500):
     import subprocess
 
     try:
         with open(save_file_path, mode="a") as file:
-            file.write("timestamp,device,utilization,power_consumption,temperature\n")
+            file.write(
+                "timestamp,device,utilization,power_consumption,temperature\n")
             while process_queue.empty():
                 dt = datetime.now(timezone.utc).isoformat()
                 nvidia_smi = subprocess.Popen(
@@ -395,26 +396,6 @@ async def benchmark(
         raise ValueError(
             "Multi-modal content is only supported on 'openai-chat' backend.")
     assert test_mm_content is None or isinstance(test_mm_content, dict)
-    # test_input = RequestFuncInput(
-    #     model=model_id,
-    #     model_name=model_name,
-    #     prompt=test_prompt,
-    #     api_url=api_url,
-    #     prompt_len=test_prompt_len,
-    #     output_len=test_output_len,
-    #     logprobs=logprobs,
-    #     multi_modal_content=test_mm_content,
-    #     ignore_eos=ignore_eos,
-    #     extra_body=extra_body,
-    # )
-
-    # test_output = await request_func(request_func_input=test_input)
-    # if not test_output.success:
-    #     raise ValueError(
-    #         "Initial test run failed - Please make sure benchmark arguments "
-    #         f"are correctly specified. Error: {test_output.error}")
-    # else:
-    #     print("Initial test run completed. Starting main benchmark run...")
 
     if lora_modules:
         # For each input request, choose a LoRA module at random.
@@ -466,15 +447,13 @@ async def benchmark(
 
     if enable_device_monitor in ["npu", "gpu"]:
         dt = datetime.now().isoformat()
-        save_file_path = os.path.join(
-            args.result_dir, f"{enable_device_monitor}-{dt}.csv"
-        )
+        save_file_path = os.path.join(args.result_dir,
+                                      f"{enable_device_monitor}-{dt}.csv")
         process = monitor_npu if enable_device_monitor == "npu" else monitor_gpu
         process_queue = Queue()
 
-        status_monitor_process = Process(
-            target=process, args=(save_file_path, process_queue)
-        )
+        status_monitor_process = Process(target=process,
+                                         args=(save_file_path, process_queue))
         status_monitor_process.start()
     else:
         status_monitor_process = None
@@ -484,7 +463,8 @@ async def benchmark(
     try:
         benchmark_start_time = time.perf_counter()
         tasks: list[asyncio.Task] = []
-        async for request in get_request(input_requests, request_rate, burstiness):
+        async for request in get_request(input_requests, request_rate,
+                                         burstiness):
             prompt, prompt_len, output_len, mm_content = request.prompt, \
                 request.prompt_len, request.expected_output_len, \
                     request.multi_modal_data
@@ -493,20 +473,21 @@ async def benchmark(
                 req_lora_module = next(lora_modules)
                 req_model_id, req_model_name = req_lora_module, req_lora_module
 
-            request_func_input = RequestFuncInput(model=req_model_id,
-                                                model_name=req_model_name,
-                                                prompt=prompt,
-                                                api_url=api_url,
-                                                prompt_len=prompt_len,
-                                                output_len=output_len,
-                                                logprobs=logprobs,
-                                                multi_modal_content=mm_content,
-                                                ignore_eos=ignore_eos,
-                                                extra_body=extra_body)
+            request_func_input = RequestFuncInput(
+                model=req_model_id,
+                model_name=req_model_name,
+                prompt=prompt,
+                api_url=api_url,
+                prompt_len=prompt_len,
+                output_len=output_len,
+                logprobs=logprobs,
+                multi_modal_content=mm_content,
+                ignore_eos=ignore_eos,
+                extra_body=extra_body)
             tasks.append(
                 asyncio.create_task(
                     limited_request_func(request_func_input=request_func_input,
-                                        pbar=pbar)))
+                                         pbar=pbar)))
         outputs: list[RequestFuncOutput] = await asyncio.gather(*tasks)
 
         if profile:
@@ -519,7 +500,8 @@ async def benchmark(
                 output_len=test_output_len,
                 logprobs=logprobs,
             )
-            profile_output = await request_func(request_func_input=profile_input)
+            profile_output = await request_func(
+                request_func_input=profile_input)
             if profile_output.success:
                 print("Profiler stopped")
 
@@ -544,7 +526,6 @@ async def benchmark(
         goodput_config_dict=goodput_config_dict,
         power_consumptions=power_consumptions,
     )
-    
 
     print("{s:{c}^{n}}".format(s=' Serving Benchmark Result ', n=50, c='='))
     print("{:<40} {:<10}".format("Successful requests:", metrics.completed))
@@ -626,30 +607,25 @@ async def benchmark(
         metric_attribute_name = "power_consumption"
 
         print("{s:{c}^{n}}".format(s=metric_header, n=50, c="-"))
-        print(
-            "{:<40} {:<10.2f}".format(
-                f"Mean {metric_name}:",
-                getattr(metrics, f"mean_{metric_attribute_name}"),
-            )
-        )
-        print(
-            "{:<40} {:<10.2f}".format(
-                f"Median {metric_name}:",
-                getattr(metrics, f"median_{metric_attribute_name}"),
-            )
-        )
+        print("{:<40} {:<10.2f}".format(
+            f"Mean {metric_name}:",
+            getattr(metrics, f"mean_{metric_attribute_name}"),
+        ))
+        print("{:<40} {:<10.2f}".format(
+            f"Median {metric_name}:",
+            getattr(metrics, f"median_{metric_attribute_name}"),
+        ))
         result[f"mean_{metric_attribute_name}"] = getattr(
-            metrics, f"mean_{metric_attribute_name}"
-        )
+            metrics, f"mean_{metric_attribute_name}")
         result[f"median_{metric_attribute_name}"] = getattr(
-            metrics, f"median_{metric_attribute_name}"
-        )
+            metrics, f"median_{metric_attribute_name}")
         result[f"std_{metric_attribute_name}"] = getattr(
-            metrics, f"std_{metric_attribute_name}"
-        )
-        for p, value in getattr(metrics, f"percentiles_{metric_attribute_name}"):
+            metrics, f"std_{metric_attribute_name}")
+        for p, value in getattr(metrics,
+                                f"percentiles_{metric_attribute_name}"):
             p_word = str(int(p)) if int(p) == p else str(p)
-            print("{:<40} {:<10.2f}".format(f"P{p_word} {metric_name}:", value))
+            print("{:<40} {:<10.2f}".format(f"P{p_word} {metric_name}:",
+                                            value))
             result[f"p{p_word}_{metric_attribute_name}"] = value
 
     if enable_device_monitor:
@@ -659,48 +635,44 @@ async def benchmark(
         result["timestamp_data"] = {}
 
         e2els = [output.latency for output in outputs]
-        requests_init_timestamp = [output.initiated_timestamp for output in outputs]
-        requests_comp_timestamp = [output.completed_timestamp for output in outputs]
+        requests_init_timestamp = [
+            output.initiated_timestamp for output in outputs
+        ]
+        requests_comp_timestamp = [
+            output.completed_timestamp for output in outputs
+        ]
 
         entire_start_timestamp = min(requests_init_timestamp)
         entire_end_timestamp = max(requests_comp_timestamp)
 
-        print(
-            "{s:{c}^{n}}".format(
-                s="Timestamp: " + entire_start_timestamp.isoformat(), n=50, c="-"
-            )
-        )
-        print(
-            "{:<40} {:<10.2f}".format(
-                "Completed Requests:",
-                0,
-            )
-        )
-        print(
-            "{:<40} {:<10.2f}".format(
-                "Number of Waiting Requests:",
-                0,
-            )
-        )
+        print("{s:{c}^{n}}".format(s="Timestamp: " +
+                                   entire_start_timestamp.isoformat(),
+                                   n=50,
+                                   c="-"))
+        print("{:<40} {:<10.2f}".format(
+            "Completed Requests:",
+            0,
+        ))
+        print("{:<40} {:<10.2f}".format(
+            "Number of Waiting Requests:",
+            0,
+        ))
         result["timestamp_data"][entire_start_timestamp.isoformat()] = {
             f"total_requests_per_{time_interval_sec}": 0,
             "number_of_wating_requests": 0,
         }
         for metric_name in ["ttft", "e2el"]:
-            print(
-                "{:<40} {:<10.2f}".format(
-                    f"Mean {metric_name} (ms):",
-                    0,
-                )
-            )
-            result["timestamp_data"][entire_start_timestamp.isoformat()][
-                f"mean_{metric_name}_ms"
-            ] = 0.0
+            print("{:<40} {:<10.2f}".format(
+                f"Mean {metric_name} (ms):",
+                0,
+            ))
+            result["timestamp_data"][entire_start_timestamp.isoformat(
+            )][f"mean_{metric_name}_ms"] = 0.0
             for p_word in ["99", "95", "50"]:
-                print("{:<40} {:<10.2f}".format(f"P{p_word} {metric_name} (ms):", 0.0))
-                result["timestamp_data"][entire_start_timestamp.isoformat()][
-                    f"p{p_word}_{metric_name}_ms"
-                ] = 0.0
+                print("{:<40} {:<10.2f}".format(
+                    f"P{p_word} {metric_name} (ms):", 0.0))
+                result["timestamp_data"][entire_start_timestamp.isoformat(
+                )][f"p{p_word}_{metric_name}_ms"] = 0.0
 
         current_timestamp = entire_start_timestamp
         number_of_completed_requests = 0
@@ -710,48 +682,41 @@ async def benchmark(
                 entire_end_timestamp + timedelta(milliseconds=1),
             )
             completed_requests_index = [
-                index
-                for index, request_comp_timestamp in enumerate(requests_comp_timestamp)
+                index for index, request_comp_timestamp in enumerate(
+                    requests_comp_timestamp)
                 if current_timestamp <= request_comp_timestamp < next_timestamp
             ]
             generated_requests_index = [
-                index
-                for index, request_init_timestamp in enumerate(requests_init_timestamp)
-                if entire_start_timestamp <= request_init_timestamp < next_timestamp
+                index for index, request_init_timestamp in enumerate(
+                    requests_init_timestamp) if entire_start_timestamp <=
+                request_init_timestamp < next_timestamp
             ]
             number_of_completed_requests += len(completed_requests_index)
             if len(completed_requests_index) == 0:
                 current_timestamp = next_timestamp
                 continue
 
-            print(
-                "{s:{c}^{n}}".format(
-                    s="Timestamp: " + next_timestamp.isoformat(), n=50, c="-"
-                )
-            )
-            print(
-                "{:<40} {:<10.2f}".format(
-                    "Completed Requests:",
-                    len(completed_requests_index),
-                )
-            )
-            print(
-                "{:<40} {:<10.2f}".format(
-                    "Number of Waiting Requests:",
-                    len(generated_requests_index) - number_of_completed_requests,
-                )
-            )
+            print("{s:{c}^{n}}".format(s="Timestamp: " +
+                                       next_timestamp.isoformat(),
+                                       n=50,
+                                       c="-"))
+            print("{:<40} {:<10.2f}".format(
+                "Completed Requests:",
+                len(completed_requests_index),
+            ))
+            print("{:<40} {:<10.2f}".format(
+                "Number of Waiting Requests:",
+                len(generated_requests_index) - number_of_completed_requests,
+            ))
             result["timestamp_data"][next_timestamp.isoformat()] = {
-                f"total_requests_per_{time_interval_sec}": len(
-                    completed_requests_index
-                ),
-                "number_of_wating_requests": len(generated_requests_index)
-                - number_of_completed_requests,
+                f"total_requests_per_{time_interval_sec}":
+                len(completed_requests_index),
+                "number_of_wating_requests":
+                len(generated_requests_index) - number_of_completed_requests,
             }
 
-            interval_requests_ttfts = np.array(result["ttfts"])[
-                completed_requests_index
-            ]
+            interval_requests_ttfts = np.array(
+                result["ttfts"])[completed_requests_index]
             interval_requests_e2els = np.array(e2els)[completed_requests_index]
 
             mean_ttft_ms = np.mean(interval_requests_ttfts) * 1000
@@ -766,25 +731,18 @@ async def benchmark(
 
             for metric_name in ["ttft", "e2el"]:
                 mean_value = locals().get(f"mean_{metric_name}_ms", 0.0)
-                print(
-                    "{:<40} {:<10.2f}".format(
-                        f"Mean {metric_name} (ms):",
-                        mean_value,
-                    )
-                )
-                result["timestamp_data"][next_timestamp.isoformat()][
-                    f"mean_{metric_name}_ms"
-                ] = mean_value
+                print("{:<40} {:<10.2f}".format(
+                    f"Mean {metric_name} (ms):",
+                    mean_value,
+                ))
+                result["timestamp_data"][next_timestamp.isoformat(
+                )][f"mean_{metric_name}_ms"] = mean_value
                 for p_word in ["99", "95", "50"]:
                     p_value = locals().get(f"p{p_word}_{metric_name}_ms", 0.0)
-                    print(
-                        "{:<40} {:<10.2f}".format(
-                            f"P{p_word} {metric_name} (ms):", p_value
-                        )
-                    )
-                    result["timestamp_data"][next_timestamp.isoformat()][
-                        f"p{p_word}_{metric_name}_ms"
-                    ] = p_value
+                    print("{:<40} {:<10.2f}".format(
+                        f"P{p_word} {metric_name} (ms):", p_value))
+                    result["timestamp_data"][next_timestamp.isoformat(
+                    )][f"p{p_word}_{metric_name}_ms"] = p_value
 
             current_timestamp = next_timestamp
             if current_timestamp >= entire_end_timestamp:
@@ -837,9 +795,18 @@ def save_to_pytorch_benchmark_format(args: argparse.Namespace,
                                      results: dict[str, Any],
                                      file_name: str) -> None:
     metrics = [
-        "median_ttft_ms", "mean_ttft_ms", "std_ttft_ms", "p99_ttft_ms",
-        "mean_tpot_ms", "median_tpot_ms", "std_tpot_ms", "p99_tpot_ms",
-        "median_itl_ms", "mean_itl_ms", "std_itl_ms", "p99_itl_ms",
+        "median_ttft_ms",
+        "mean_ttft_ms",
+        "std_ttft_ms",
+        "p99_ttft_ms",
+        "mean_tpot_ms",
+        "median_tpot_ms",
+        "std_tpot_ms",
+        "p99_tpot_ms",
+        "median_itl_ms",
+        "mean_itl_ms",
+        "std_itl_ms",
+        "p99_itl_ms",
     ]
     # These raw data might be useful, but they are rather big. They can be added
     # later if needed
@@ -948,7 +915,8 @@ def main(args: argparse.Namespace):
             "sharegpt":
             lambda: ShareGPTDataset(random_seed=args.seed,
                                     dataset_path=args.dataset_path,
-                                    target_max_prompt_len=args.target_max_prompt_len).sample(
+                                    target_max_prompt_len=args.
+                                    target_max_prompt_len).sample(
                                         tokenizer=tokenizer,
                                         num_requests=args.num_prompts,
                                         output_len=args.sharegpt_output_len,
@@ -1411,7 +1379,6 @@ if __name__ == "__main__":
                         help="A subset of LoRA module names passed in when "
                         "launching the server. For each request, the "
                         "script chooses a LoRA module at random.")
-
 
     parser.add_argument("--target-max-prompt-len",
                         type=int,

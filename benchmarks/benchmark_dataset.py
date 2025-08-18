@@ -40,8 +40,12 @@ from transformers import PreTrainedTokenizerBase
 LoRARequest = Any
 MultiModalDataDict = Any
 AnyTokenizer = Any
+
+
 def _raise_import_error(*args, **kwargs):
     raise ImportError("vllm installation is required for this module.")
+
+
 get_adapter_absolute_path = get_lora_tokenizer = _raise_import_error
 
 logger = logging.getLogger(__name__)
@@ -423,9 +427,11 @@ class ShareGPTDataset(BenchmarkDataset):
                 continue
 
             if self.target_max_prompt_len:
-                scaling_ratio = self.target_max_prompt_len // 1024 # 1024 is default max_prompt_len value of is_valid_sequence
+                # 1024 is default max_prompt_len value of is_valid_sequence
+                scaling_ratio = self.target_max_prompt_len // 1024
                 scaled_prompt_ids = prompt_ids * scaling_ratio
-                prompt = tokenizer.decode(scaled_prompt_ids, skip_special_tokens=True)
+                prompt = tokenizer.decode(scaled_prompt_ids,
+                                          skip_special_tokens=True)
                 prompt_len = len(scaled_prompt_ids)
 
             if enable_multimodal_chat:
@@ -880,7 +886,9 @@ class FixedIODataset(BenchmarkDataset):
                                         output_high + 1,
                                         size=num_requests)
         requests = []
-        prompt_stream = tokenizer.encode("0101010101010101" * (prefix_len + input_high), add_special_tokens=False)
+        prompt_stream = tokenizer.encode("0101010101010101" *
+                                         (prefix_len + input_high),
+                                         add_special_tokens=False)
         for i in range(num_requests):
             prompt_len = int(input_lens[i]) + prefix_len
             prompt = prompt_stream[:prompt_len]
