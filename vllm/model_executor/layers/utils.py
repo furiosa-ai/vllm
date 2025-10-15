@@ -5,7 +5,7 @@ from typing import Callable, Optional
 
 import torch
 
-from vllm import _custom_ops as ops
+# from vllm import _custom_ops as ops
 from vllm import envs
 from vllm.platforms import CpuArchEnum, current_platform
 from vllm.utils import direct_register_custom_op
@@ -57,10 +57,10 @@ def apply_penalties(logits: torch.Tensor, prompt_tokens_tensor: torch.Tensor,
     """
     Applies penalties in place to the logits tensor
     logits : The input logits tensor of shape [num_seqs, vocab_size]
-    prompt_tokens_tensor: A tensor containing the prompt tokens. The prompts 
-        are padded to the maximum prompt length within the batch using 
-        `vocab_size` as the padding value. The value `vocab_size` is used 
-        for padding because it does not correspond to any valid token ID 
+    prompt_tokens_tensor: A tensor containing the prompt tokens. The prompts
+        are padded to the maximum prompt length within the batch using
+        `vocab_size` as the padding value. The value `vocab_size` is used
+        for padding because it does not correspond to any valid token ID
         in the vocabulary.
     output_tokens_tensor: The output tokens tensor.
     presence_penalties: The presence penalties of shape (num_seqs, )

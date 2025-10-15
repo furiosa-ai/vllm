@@ -69,14 +69,14 @@ class KVEventBatch(EventBatch):
 class EventPublisher(ABC):
     """Lightweight publisher for EventBatch batches with data parallelism
     support.
-    
+
     In data parallel setups, each DP rank runs its own EventPublisher instance
     to avoid duplicate events and ensure proper event attribution:
-    
+
     - Each DP rank creates a separate publisher
     - Publishers automatically annotate events with their data_parallel_rank
     - This allows consumers to distinguish events from different DP ranks
-    
+
     The publisher is responsible for adding DP metadata since the scheduler
     operates independently of DP topology and shouldn't need DP awareness.
     """
@@ -299,16 +299,16 @@ class ZmqEventPublisher(EventPublisher):
     @staticmethod
     def offset_endpoint_port(endpoint: Optional[str],
                              data_parallel_rank: int) -> Optional[str]:
-        """Helper function to offset the port in an endpoint by 
+        """Helper function to offset the port in an endpoint by
             the data parallel rank.
 
         Args:
-            endpoint: The endpoint string 
+            endpoint: The endpoint string
                 (e.g., "tcp://*:5557" or "inproc://cache")
             data_parallel_rank: The data parallel rank to offset by
 
         Returns:
-            The endpoint with the port offset by data_parallel_rank 
+            The endpoint with the port offset by data_parallel_rank
                 or suffix appended
         """
         # Do nothing if input is None or data_parallel_rank is 0

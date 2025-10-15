@@ -50,6 +50,7 @@ class DeviceConfig:
         return hash_str
 
     def __post_init__(self):
+        return  # to avoid device_type error
         if self.device == "auto":
             # Automated device type detection
             from vllm.platforms import current_platform

@@ -117,7 +117,7 @@ def get_kv_connector_cache_layout():
 
 
 class KVOutputAggregator:
-    """Utility class to aggregate the output of all workers into a single 
+    """Utility class to aggregate the output of all workers into a single
     output corresponding to Rank 0 for scheduler."""
 
     def __init__(self, world_size: int):

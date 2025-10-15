@@ -45,13 +45,13 @@ class RenderConfig:
 class BaseRenderer(ABC):
     """
     Base class for unified input processing and rendering.
-    
+
     The Renderer serves as a unified input processor that consolidates
     tokenization, chat template formatting, and multimodal input handling
     into a single component.
     It converts high-level API requests (OpenAI-style JSON) into token IDs and
     multimodal features ready for engine consumption.
-    
+
     Key responsibilities:
     - Convert text prompts to token sequences with proper special tokens
     - Apply chat templates and format conversations
@@ -90,7 +90,7 @@ class BaseRenderer(ABC):
                 - ``list[int]``: Single pre-tokenized sequence.
                 - ``list[list[int]]``: Batch of pre-tokenized sequences.
             config: Render configuration controlling how prompts are prepared
-                (e.g., tokenization and length handling). 
+                (e.g., tokenization and length handling).
 
         Returns:
             list[EngineTokensPrompt]: Engine-ready token prompts.
@@ -122,7 +122,7 @@ class BaseRenderer(ABC):
             prompt_embeds: Base64-encoded bytes (or list thereof) containing a
                 torch-saved tensor to be used as prompt embeddings.
             config: Render configuration controlling how prompts are prepared
-                (e.g., tokenization and length handling). 
+                (e.g., tokenization and length handling).
 
         Returns:
             list[Union[EngineTokensPrompt, EngineEmbedsPrompt]]:
@@ -192,7 +192,7 @@ class CompletionRenderer(BaseRenderer):
         config: "RenderConfig",
     ) -> list[EngineTokensPrompt]:
         """Implementation of prompt rendering for completion-style requests.
-        
+
         Uses async tokenizer pooling for improved performance. See base class
         for detailed parameter documentation.
         """

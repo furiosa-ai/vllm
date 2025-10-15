@@ -53,13 +53,13 @@ from urllib.parse import urlparse
 from uuid import uuid4
 
 import cachetools
-import cbor2
-import cloudpickle
+# import cbor2
+# import cloudpickle
 import numpy as np
 import numpy.typing as npt
 import psutil
 import regex as re
-import setproctitle
+# import setproctitle
 import torch
 import torch.types
 import yaml
@@ -1388,8 +1388,8 @@ def find_nccl_library() -> str:
 def find_nccl_include_paths() -> Optional[list[str]]:
     """
     We either use the nccl.h specified by the `VLLM_NCCL_INCLUDE_PATH`
-    environment variable, or we find the library file brought by 
-    nvidia-nccl-cuXX. load_inline by default uses 
+    environment variable, or we find the library file brought by
+    nvidia-nccl-cuXX. load_inline by default uses
     torch.utils.cpp_extension.include_paths
     """
     paths: list[str] = []
