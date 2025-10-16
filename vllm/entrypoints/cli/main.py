@@ -19,11 +19,11 @@ def main():
     from vllm.utils import FlexibleArgumentParser
 
     CMD_MODULES = [
-        vllm.entrypoints.cli.openai,
-        vllm.entrypoints.cli.serve,
+        # vllm.entrypoints.cli.openai,
+        # vllm.entrypoints.cli.serve,
         vllm.entrypoints.cli.benchmark.main,
-        vllm.entrypoints.cli.collect_env,
-        vllm.entrypoints.cli.run_batch,
+        # vllm.entrypoints.cli.collect_env,
+        # vllm.entrypoints.cli.run_batch,
     ]
 
     cli_env_setup()
@@ -36,7 +36,7 @@ def main():
         '-v',
         '--version',
         action='version',
-        version=importlib.metadata.version('vllm'),
+        version='version N/A',
     )
     subparsers = parser.add_subparsers(required=False, dest="subparser")
     cmds = {}

@@ -5,7 +5,7 @@ import os
 from typing import (Any, Callable, Dict, List, Optional, Set, Tuple, TypeVar,
                     Union)
 
-import cloudpickle
+# import cloudpickle
 import torch.nn as nn
 
 from vllm.config import VllmConfig, set_current_vllm_config

@@ -12,7 +12,7 @@ import numpy as np
 import regex as re
 import torch
 from cachetools import LRUCache
-from diskcache import Cache
+# from diskcache import Cache
 
 import vllm.envs as envs
 from vllm.logger import init_logger

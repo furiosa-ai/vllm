@@ -274,7 +274,7 @@ class MultiModalProfiler(Generic[_I]):
 
         `<im_start> [IMG] [IMG] [IMG] <row_break> [IMG] [IMG] [IMG] <im_end>`
         Returns 9, even when the number of image embeddings is 6.
-        
+
         This is important to take into account when profiling and
         initializing the encoder cache size.
         """

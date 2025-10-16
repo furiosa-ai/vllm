@@ -9,7 +9,7 @@ from inspect import isclass
 from types import FunctionType
 from typing import Any, Callable, Optional, Union
 
-import cloudpickle
+# import cloudpickle
 import msgspec
 import numpy as np
 import torch
@@ -101,7 +101,7 @@ class MsgpackEncoder:
     Note that unlike vanilla `msgspec` Encoders, this interface is generally
     not thread-safe when encoding tensors / numpy arrays.
 
-    By default, arrays below 256B are serialized inline Larger will get sent 
+    By default, arrays below 256B are serialized inline Larger will get sent
     via dedicated messages. Note that this is a per-tensor limit.
     """
 
