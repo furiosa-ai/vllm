@@ -1127,6 +1127,11 @@ def add_cli_args(parser: argparse.ArgumentParser):
                         "launching the server. For each request, the "
                         "script chooses a LoRA module at random.")
 
+    parser.add_argument("--target-max-prompt-len",
+                        type=int,
+                        default=None,
+                        help="A value used to scale prompt up to")
+
     parser.add_argument(
         "--ramp-up-strategy",
         type=str,
