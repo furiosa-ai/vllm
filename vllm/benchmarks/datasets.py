@@ -932,6 +932,7 @@ class ShareGPTDataset(BenchmarkDataset):
     """
 
     def __init__(self, **kwargs) -> None:
+        self.target_max_prompt_len = kwargs.pop("target_max_prompt_len", None)
         super().__init__(**kwargs)
         self.load_data()
 
@@ -983,6 +984,11 @@ class ShareGPTDataset(BenchmarkDataset):
                                      skip_min_output_len_check=output_len
                                      is not None):
                 continue
+            if self.target_max_prompt_len:
+                scaling_ratio = self.target_max_prompt_len // 1024 # 1024 is default max_prompt_len value of is_valid_sequence
+                scaled_prompt_ids = prompt_ids * scaling_ratio
+                prompt = tokenizer.decode(scaled_prompt_ids, skip_special_tokens=True)
+                prompt_len = len(scaled_prompt_ids)
             if image_path := entry.get("image"):
                 mm_content = process_image(image_path)
             elif video_path := entry.get("video"):
@@ -1500,7 +1506,8 @@ def get_samples(args, tokenizer) -> list[SampleRequest]:
                 no_oversample=args.no_oversample,
             ),
             "sharegpt": lambda: ShareGPTDataset(
-                random_seed=args.seed, dataset_path=args.dataset_path
+                random_seed=args.seed, dataset_path=args.dataset_path,
+                target_max_prompt_len=args.target_max_prompt_len
             ).sample(
                 tokenizer=tokenizer,
                 num_requests=args.num_prompts,
