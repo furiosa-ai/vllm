@@ -729,6 +729,7 @@ async def benchmark(
             "ttfts": [output.ttft for output in outputs],
             "itls": [output.itl for output in outputs],
             "generated_texts": [output.generated_text for output in outputs],
+            "prompt": [output.prompt for output in outputs],
             "errors": [output.error for output in outputs],
             "max_output_tokens_per_s": metrics.max_output_tokens_per_s,
             "max_concurrent_requests": metrics.max_concurrent_requests,

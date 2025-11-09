@@ -91,6 +91,7 @@ class RequestFuncOutput:
     prompt_len: int = 0
     error: str = ""
     start_time: float = 0.0
+    prompt = ""
 
 
 class RequestFunc(Protocol):
@@ -148,6 +149,7 @@ async def async_request_openai_completions(
         headers["x-request-id"] = request_func_input.request_id
 
     output = RequestFuncOutput()
+    output.prompt = request_func_input.prompt
     output.prompt_len = request_func_input.prompt_len
 
     generated_text = ""
@@ -280,6 +282,7 @@ async def async_request_openai_chat_completions(
         headers["x-request-id"] = request_func_input.request_id
 
     output = RequestFuncOutput()
+    output.prompt = request_func_input.prompt
     output.prompt_len = request_func_input.prompt_len
 
     generated_text = ""
