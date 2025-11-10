@@ -985,8 +985,13 @@ class ShareGPTDataset(BenchmarkDataset):
                     print(f"Warning: Failed to calculate chat template overhead: {e}")
                     chat_template_overhead = 0
 
-        # Collect all valid samples (don't limit to num_requests yet)
+        # Collect samples
+        processed_count = 0
         for entry in self.data:
+            # Stop early if we have enough samples and don't need sorting
+            if len(samples) >= num_requests:
+                break
+
             prompt, completion = (
                 entry["conversations"][0]["value"],
                 entry["conversations"][1]["value"],
@@ -995,8 +1000,8 @@ class ShareGPTDataset(BenchmarkDataset):
             lora_request = self.get_random_lora_request(
                 max_loras=max_loras, lora_path=lora_path)
             prompt_ids = tokenizer(prompt).input_ids
-            completion_ids = tokenizer(completion).input_ids
             prompt_len = len(prompt_ids)
+            processed_count += 1
 
             # Apply target_total and target_output filtering if specified
             if self.target_total is not None and self.target_output is not None:
@@ -1011,6 +1016,8 @@ class ShareGPTDataset(BenchmarkDataset):
                 # Set output_len = target_total - effective_prompt_len
                 new_output_len = self.target_total - effective_prompt_len
             else:
+                # Only tokenize completion when we actually need its length
+                completion_ids = tokenizer(completion).input_ids
                 new_output_len = (len(completion_ids)
                                   if output_len is None else output_len)
                 if not is_valid_sequence(prompt_len,
@@ -1034,6 +1041,16 @@ class ShareGPTDataset(BenchmarkDataset):
             if enable_multimodal_chat:
                 prompt = self.apply_multimodal_chat_transformation(
                     prompt, mm_content)
+            elif self.enable_chat_template:
+                # Convert to chat format for openai-chat backend
+                prompt = tokenizer.apply_chat_template(
+                    [{
+                        "role": "user",
+                        "content": prompt
+                    }],
+                    add_generation_prompt=True,
+                    tokenize=False,
+                )
 
             samples.append(
                 SampleRequest(
@@ -1045,6 +1062,8 @@ class ShareGPTDataset(BenchmarkDataset):
                     request_id=request_id_prefix + str(ind),
                 ))
             ind += 1
+
+        print(f"Processed {processed_count} entries, collected {len(samples)} samples")
 
         # Sort by input length (ascending) if target options are used
         if self.target_total is not None and self.target_output is not None:
