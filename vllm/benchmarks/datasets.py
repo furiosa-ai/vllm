@@ -933,6 +933,9 @@ class ShareGPTDataset(BenchmarkDataset):
 
     def __init__(self, **kwargs) -> None:
         self.target_max_prompt_len = kwargs.pop("target_max_prompt_len", None)
+        self.target_total = kwargs.pop("target_total", None)
+        self.target_output = kwargs.pop("target_output", None)
+        self.enable_chat_template = kwargs.pop("enable_chat_template", False)
         super().__init__(**kwargs)
         self.load_data()
 
@@ -964,9 +967,26 @@ class ShareGPTDataset(BenchmarkDataset):
     ) -> list:
         samples: list = []
         ind = 0
+
+        # Calculate chat template overhead if enabled
+        chat_template_overhead = 0
+        if self.enable_chat_template and self.target_total is not None and self.target_output is not None:
+            if hasattr(tokenizer, 'apply_chat_template') and tokenizer.chat_template:
+                try:
+                    # Apply chat template to empty message to get overhead
+                    empty_template = tokenizer.apply_chat_template(
+                        [{"role": "user", "content": ""}],
+                        tokenize=False,
+                        add_generation_prompt=True
+                    )
+                    chat_template_overhead = len(tokenizer.encode(empty_template, add_special_tokens=False))
+                    print(f"Chat template overhead: {chat_template_overhead} tokens")
+                except Exception as e:
+                    print(f"Warning: Failed to calculate chat template overhead: {e}")
+                    chat_template_overhead = 0
+
+        # Collect all valid samples (don't limit to num_requests yet)
         for entry in self.data:
-            if len(samples) >= num_requests:
-                break
             prompt, completion = (
                 entry["conversations"][0]["value"],
                 entry["conversations"][1]["value"],
@@ -977,18 +997,34 @@ class ShareGPTDataset(BenchmarkDataset):
             prompt_ids = tokenizer(prompt).input_ids
             completion_ids = tokenizer(completion).input_ids
             prompt_len = len(prompt_ids)
-            new_output_len = (len(completion_ids)
-                              if output_len is None else output_len)
-            if not is_valid_sequence(prompt_len,
-                                     new_output_len,
-                                     skip_min_output_len_check=output_len
-                                     is not None):
-                continue
+
+            # Apply target_total and target_output filtering if specified
+            if self.target_total is not None and self.target_output is not None:
+                # Adjust prompt_len to account for chat template overhead
+                effective_prompt_len = prompt_len + chat_template_overhead
+
+                # Filter: effective_prompt_len must be in range [target_total - target_output, target_total]
+                min_prompt_len = self.target_total - self.target_output
+                max_prompt_len = self.target_total
+                if not (min_prompt_len <= effective_prompt_len <= max_prompt_len):
+                    continue
+                # Set output_len = target_total - effective_prompt_len
+                new_output_len = self.target_total - effective_prompt_len
+            else:
+                new_output_len = (len(completion_ids)
+                                  if output_len is None else output_len)
+                if not is_valid_sequence(prompt_len,
+                                         new_output_len,
+                                         skip_min_output_len_check=output_len
+                                         is not None):
+                    continue
+
             if self.target_max_prompt_len:
                 scaling_ratio = self.target_max_prompt_len // 1024 # 1024 is default max_prompt_len value of is_valid_sequence
                 scaled_prompt_ids = prompt_ids * scaling_ratio
                 prompt = tokenizer.decode(scaled_prompt_ids, skip_special_tokens=True)
                 prompt_len = len(scaled_prompt_ids)
+
             if image_path := entry.get("image"):
                 mm_content = process_image(image_path)
             elif video_path := entry.get("video"):
@@ -998,6 +1034,7 @@ class ShareGPTDataset(BenchmarkDataset):
             if enable_multimodal_chat:
                 prompt = self.apply_multimodal_chat_transformation(
                     prompt, mm_content)
+
             samples.append(
                 SampleRequest(
                     prompt=prompt,
@@ -1008,6 +1045,18 @@ class ShareGPTDataset(BenchmarkDataset):
                     request_id=request_id_prefix + str(ind),
                 ))
             ind += 1
+
+        # Sort by input length (ascending) if target options are used
+        if self.target_total is not None and self.target_output is not None:
+            samples = sorted(samples, key=lambda x: x.prompt_len)
+
+        # Now limit to num_requests
+        samples = samples[:num_requests]
+
+        # Update request IDs after filtering
+        for idx, sample in enumerate(samples):
+            sample.request_id = request_id_prefix + str(idx)
+
         self.maybe_oversample_requests(samples,
                                        num_requests,
                                        request_id_prefix,
@@ -1135,6 +1184,31 @@ def add_dataset_parser(parser: FlexibleArgumentParser):
         default=None,
         help="Output length for each request. Overrides the output length "
         "from the ShareGPT dataset.",
+    )
+    sharegpt_group.add_argument(
+        "--sharegpt-target-total",
+        type=int,
+        default=None,
+        help="Target total length (input + output) for filtering requests. "
+        "Used with --sharegpt-target-output to filter requests where "
+        "input length is between (target-total - target-output) and target-total. "
+        "Filtered requests will be sorted by input length (ascending).",
+    )
+    sharegpt_group.add_argument(
+        "--sharegpt-target-output",
+        type=int,
+        default=None,
+        help="Target output length for filtering requests. "
+        "Used with --sharegpt-target-total to filter requests and set "
+        "output_len = target-total - input_len for each request.",
+    )
+    sharegpt_group.add_argument(
+        "--sharegpt-enable-chat-template",
+        action="store_true",
+        help="Enable chat template overhead calculation when using "
+        "--sharegpt-target-total and --sharegpt-target-output. "
+        "This calculates the chat template overhead and adjusts filtering "
+        "to account for the additional tokens added by the template.",
     )
 
     blazedit_group = parser.add_argument_group("blazedit dataset options")
@@ -1507,7 +1581,10 @@ def get_samples(args, tokenizer) -> list[SampleRequest]:
             ),
             "sharegpt": lambda: ShareGPTDataset(
                 random_seed=args.seed, dataset_path=args.dataset_path,
-                target_max_prompt_len=args.target_max_prompt_len
+                target_max_prompt_len=args.target_max_prompt_len,
+                target_total=args.sharegpt_target_total,
+                target_output=args.sharegpt_target_output,
+                enable_chat_template=args.sharegpt_enable_chat_template,
             ).sample(
                 tokenizer=tokenizer,
                 num_requests=args.num_prompts,
