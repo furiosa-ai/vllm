@@ -936,6 +936,7 @@ class ShareGPTDataset(BenchmarkDataset):
         self.target_total = kwargs.pop("target_total", None)
         self.target_output = kwargs.pop("target_output", None)
         self.enable_chat_template = kwargs.pop("enable_chat_template", False)
+        self.output_adjustment = kwargs.pop("output_adjustment", 0)
         super().__init__(**kwargs)
         self.load_data()
 
@@ -1008,12 +1009,12 @@ class ShareGPTDataset(BenchmarkDataset):
                 # Adjust prompt_len to account for chat template overhead
                 effective_prompt_len = prompt_len + chat_template_overhead
 
-                # Filter: effective_prompt_len must be in range [target_total - target_output, target_total]
-                min_prompt_len = self.target_total - self.target_output
+                # Filter: effective_prompt_len must be in range to ensure output >= target_output
+                min_prompt_len = self.target_total - self.target_output - self.output_adjustment
                 max_prompt_len = self.target_total
                 if not (min_prompt_len <= effective_prompt_len <= max_prompt_len):
                     continue
-                # Set output_len = target_total - effective_prompt_len
+                # Set output_len = target_total - effective_prompt_len (keeps total at target_total)
                 new_output_len = self.target_total - effective_prompt_len
             else:
                 # Only tokenize completion when we actually need its length
@@ -1228,6 +1229,14 @@ def add_dataset_parser(parser: FlexibleArgumentParser):
         "--sharegpt-target-total and --sharegpt-target-output. "
         "This calculates the chat template overhead and adjusts filtering "
         "to account for the additional tokens added by the template.",
+    )
+    sharegpt_group.add_argument(
+        "--sharegpt-output-adjustment",
+        type=int,
+        default=0,
+        help="Adjustment to transfer from input to output. "
+        "Positive values decrease input length and increase output length by the same amount. "
+        "Used with --sharegpt-target-total and --sharegpt-target-output.",
     )
 
     blazedit_group = parser.add_argument_group("blazedit dataset options")
@@ -1604,6 +1613,7 @@ def get_samples(args, tokenizer) -> list[SampleRequest]:
                 target_total=args.sharegpt_target_total,
                 target_output=args.sharegpt_target_output,
                 enable_chat_template=args.sharegpt_enable_chat_template,
+                output_adjustment=args.sharegpt_output_adjustment,
             ).sample(
                 tokenizer=tokenizer,
                 num_requests=args.num_prompts,
