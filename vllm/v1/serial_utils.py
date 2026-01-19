@@ -10,7 +10,7 @@ from inspect import isclass
 from types import FunctionType
 from typing import Any, TypeAlias, get_type_hints
 
-import cloudpickle
+# import cloudpickle
 import msgspec
 import numpy as np
 import torch

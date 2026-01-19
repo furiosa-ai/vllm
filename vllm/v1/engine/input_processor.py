@@ -24,14 +24,14 @@ from vllm.tokenizers.mistral import MistralTokenizer
 from vllm.utils import length_from_prompt_token_ids_or_embeds
 from vllm.v1.engine import EngineCoreRequest
 from vllm.v1.metrics.stats import MultiModalCacheStats
-from vllm.v1.structured_output.backend_guidance import validate_guidance_grammar
-from vllm.v1.structured_output.backend_lm_format_enforcer import (
-    validate_structured_output_request_lm_format_enforcer,
-)
-from vllm.v1.structured_output.backend_outlines import (
-    validate_structured_output_request_outlines,
-)
-from vllm.v1.structured_output.backend_xgrammar import validate_xgrammar_grammar
+# from vllm.v1.structured_output.backend_guidance import validate_guidance_grammar
+# from vllm.v1.structured_output.backend_lm_format_enforcer import (
+#     validate_structured_output_request_lm_format_enforcer,
+# )
+# from vllm.v1.structured_output.backend_outlines import (
+#     validate_structured_output_request_outlines,
+# )
+# from vllm.v1.structured_output.backend_xgrammar import validate_xgrammar_grammar
 
 logger = init_logger(__name__)
 

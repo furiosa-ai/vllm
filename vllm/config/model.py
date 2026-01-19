@@ -36,12 +36,12 @@ from vllm.transformers_utils.config import (
     uses_mrope,
     uses_xdrope_dim,
 )
-from vllm.transformers_utils.gguf_utils import (
-    is_gguf,
-    is_remote_gguf,
-    maybe_patch_hf_config_from_gguf,
-    split_remote_gguf,
-)
+# from vllm.transformers_utils.gguf_utils import (
+#     is_gguf,
+#     is_remote_gguf,
+#     maybe_patch_hf_config_from_gguf,
+#     split_remote_gguf,
+# )
 from vllm.transformers_utils.runai_utils import ObjectStorageModel, is_runai_obj_uri
 from vllm.transformers_utils.utils import maybe_model_redirect
 from vllm.utils.import_utils import LazyLoader

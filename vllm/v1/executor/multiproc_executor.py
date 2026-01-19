@@ -22,7 +22,7 @@ from multiprocessing.synchronize import Lock as LockType
 from threading import Thread
 from typing import Any, cast
 
-import cloudpickle
+# import cloudpickle
 import torch
 
 import vllm.envs as envs

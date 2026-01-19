@@ -29,12 +29,12 @@ from vllm.logger import init_logger
 from vllm.transformers_utils.utils import parse_safetensors_file_metadata
 
 from .config_parser_base import ConfigParserBase
-from .gguf_utils import (
-    check_gguf_file,
-    is_gguf,
-    is_remote_gguf,
-    split_remote_gguf,
-)
+# from .gguf_utils import (
+#     check_gguf_file,
+#     is_gguf,
+#     is_remote_gguf,
+#     split_remote_gguf,
+# )
 from .repo_utils import (
     _get_hf_token,
     file_or_path_exists,

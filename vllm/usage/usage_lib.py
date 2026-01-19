@@ -13,7 +13,7 @@ from threading import Thread
 from typing import Any
 from uuid import uuid4
 
-import cpuinfo
+# import cpuinfo
 import psutil
 import requests
 import torch

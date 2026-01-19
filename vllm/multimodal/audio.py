@@ -7,7 +7,7 @@ from typing import Literal
 
 import numpy as np
 import numpy.typing as npt
-import pybase64
+# import pybase64
 import torch
 
 from vllm.utils.import_utils import PlaceholderModule

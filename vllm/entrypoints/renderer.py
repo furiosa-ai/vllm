@@ -7,7 +7,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Annotated
 
-import pybase64
+# import pybase64
 import torch
 from pydantic import Field
 

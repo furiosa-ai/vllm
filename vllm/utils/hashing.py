@@ -9,7 +9,7 @@ from _hashlib import HASH, UnsupportedDigestmodError
 from collections.abc import Callable
 from typing import Any
 
-import cbor2
+# import cbor2
 
 try:
     # It is important that this remains an optional dependency.
