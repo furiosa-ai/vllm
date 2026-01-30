@@ -15,11 +15,13 @@ generation. Supported dataset types include:
 import argparse
 import ast
 import base64
+import functools
 import io
 import json
 import logging
 import math
 import random
+import unittest.mock
 from abc import ABC, abstractmethod
 from collections.abc import Callable, Iterator, Mapping
 from contextlib import suppress
@@ -1294,6 +1296,45 @@ class ShareGPTDataset(BenchmarkDataset):
         return samples
 
 
+class FuriosaShareGPTDataset(ShareGPTDataset):
+    """
+    A subclass of ShareGPTDataset that dynamically overrides the sequence
+    length limits based on the model's configuration.
+    """
+
+    def sample(self, *args, **kwargs) -> list:
+        model_id = kwargs.pop("model_id", None)
+        if model_id is None:
+            raise ValueError(
+                "FuriosaShareGPTDataset.sample requires 'model_id' to be passed as a keyword argument."
+            )
+        trust_remote_code = kwargs.pop("trust_remote_code", None)
+
+        import transformers
+
+        config = transformers.AutoConfig.from_pretrained(
+            model_id, trust_remote_code=trust_remote_code
+        )
+
+        max_len = (
+            getattr(config, "max_position_embeddings", None)
+            or getattr(config, "max_sequence_length", None)
+            or getattr(config, "n_positions", None)
+        )
+        if max_len is None:
+            raise ValueError(
+                f"Could not determine maximum sequence length from model config for model '{model_id}'. Tried attributes: 'max_position_embeddings', 'max_sequence_length', 'n_positions'."
+            )
+
+        is_valid_sequence_patched = functools.partial(
+            is_valid_sequence, max_prompt_len=max_len, max_total_len=max_len
+        )
+        with unittest.mock.patch(
+            f"{__name__}.is_valid_sequence", new=is_valid_sequence_patched
+        ):
+            return super().sample(*args, **kwargs)
+
+
 class _ValidateDatasetArgs(argparse.Action):
     """Argparse action to validate dataset name and path compatibility."""
 
@@ -1329,6 +1370,7 @@ def add_dataset_parser(parser: FlexibleArgumentParser):
         action=_ValidateDatasetArgs,
         choices=[
             "sharegpt",
+            "sharegpt-furiosa",
             "burstgpt",
             "sonnet",
             "random",
@@ -1832,6 +1874,19 @@ def get_samples(args, tokenizer: TokenizerLike) -> list[SampleRequest]:
                 output_len=args.sharegpt_output_len,
                 request_id_prefix=args.request_id_prefix,
                 no_oversample=args.no_oversample,
+            ),
+            "sharegpt-furiosa": lambda: FuriosaShareGPTDataset(
+                random_seed=args.seed,
+                dataset_path=args.dataset_path,
+                disable_shuffle=args.disable_shuffle,
+            ).sample(
+                tokenizer=tokenizer,
+                num_requests=args.num_prompts,
+                output_len=args.sharegpt_output_len,
+                request_id_prefix=args.request_id_prefix,
+                no_oversample=args.no_oversample,
+                model_id=args.model,
+                trust_remote_code=args.trust_remote_code,
             ),
             "burstgpt": lambda: BurstGPTDataset(
                 random_seed=args.seed,
