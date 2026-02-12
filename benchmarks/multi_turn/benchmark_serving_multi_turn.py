@@ -412,9 +412,6 @@ async def send_turn(
         # No reference assistant answer in the dataset for this user prompt;
         # can't derive token limits, so remove the dataset-derived defaults
         # and let the model generate freely.
-        if min_tokens == NUM_TOKENS_FROM_DATASET:
-            min_tokens = None
-
         if max_tokens == NUM_TOKENS_FROM_DATASET:
             max_tokens = None
 
