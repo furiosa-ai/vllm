@@ -408,6 +408,12 @@ async def send_turn(
 
         if max_tokens == NUM_TOKENS_FROM_DATASET:
             max_tokens = max(1, answer_num_tokens)
+    else:
+        # No reference assistant answer in the dataset for this user prompt;
+        # can't derive token limits, so remove the dataset-derived defaults
+        # and let the model generate freely.
+        if max_tokens == NUM_TOKENS_FROM_DATASET:
+            max_tokens = None
 
     # Send the current conversation to LLM and get a response
     response: ServerResponse = await send_request(
@@ -661,7 +667,7 @@ async def client_main(
             turns_count[conv_id] += 1
             current_turn = turns_count[conv_id]
 
-            assert current_turn < len(messages), (
+            assert current_turn <= len(messages), (
                 f"Turn number {current_turn} is invalid for conversation ID {conv_id}"
                 f" that has only {len(messages)} messages"
             )
