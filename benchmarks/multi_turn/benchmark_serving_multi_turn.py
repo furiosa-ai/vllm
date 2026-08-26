@@ -581,6 +581,7 @@ async def client_main(
     turns_count: Counter = Counter()
     num_successes = 0
     num_failures = 0
+    num_tasks_consumed = 0
 
     # Track the timestamp (time.perf_counter())
     # of the last turn per conversation (only for debug)
@@ -618,6 +619,7 @@ async def client_main(
             ):
                 # Get a new conversation from the task queue
                 conv_id, messages = task_queue.get()
+                num_tasks_consumed += 1
 
                 if conv_id is TERM_SIGNAL:
                     task_queue_empty = True
@@ -769,7 +771,7 @@ async def client_main(
                 await poisson_sleep(args.request_rate, args.verbose)
 
     # Send indication that the client is done
-    conv_queue.put((TERM_SIGNAL, TERM_SIGNAL))
+    conv_queue.put((TERM_SIGNAL, num_tasks_consumed))
 
     logger.info(
         f"{Color.CYAN}Client {client_id} is done "
@@ -940,6 +942,7 @@ async def main_mp(
 
     # Collect the updated conversations from all clients
     num_clients_finished = 0
+    num_total_tasks_consumed = 0
     total_convs = len(input_conv)
 
     debug_stats = DebugStats(logger, min(15 * bench_args.num_clients, 500))
@@ -955,6 +958,9 @@ async def main_mp(
             debug_stats.update(new_data)
 
         if conv_id is TERM_SIGNAL:
+            # When a client terminates,
+            # it also provides the number of messages it has received.
+            num_total_tasks_consumed += messages
             num_clients_finished += 1
             logger.info(
                 f"{Color.CYAN}{num_clients_finished} out of "
@@ -1045,10 +1051,12 @@ async def main_mp(
     )
 
     # Queues should be closed, required to avoid hang at interpreter shutdown
-    unfinished_tasks = 0
-    while not task_queue.empty():
+    # Count the number of unfinished tasks (conversations) in the task queue
+    # bench_args.num_clients is for the termination signals that were sent to
+    # the clients
+    unfinished_tasks = total_convs + bench_args.num_clients - num_total_tasks_consumed
+    for _ in range(unfinished_tasks):
         task_queue.get()
-        unfinished_tasks += 1
 
     if unfinished_tasks > 0:
         # Can happen if not all tasks (conversations) have finished.
