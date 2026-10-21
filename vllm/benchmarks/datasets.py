@@ -99,6 +99,7 @@ class BenchmarkDataset(ABC):
         dataset_path: str | None = None,
         random_seed: int = DEFAULT_SEED,
         disable_shuffle: bool = False,
+        model_id: str | None = None,
         **kwargs,
     ) -> None:
         """
@@ -117,6 +118,7 @@ class BenchmarkDataset(ABC):
         self.random_seed = random_seed if random_seed is not None else self.DEFAULT_SEED
         self.disable_shuffle = disable_shuffle
         self.data = None
+        self.model_id = model_id
 
     def apply_multimodal_chat_transformation(
         self,
@@ -1248,6 +1250,13 @@ class ShareGPTDataset(BenchmarkDataset):
         no_oversample: bool = False,
         **kwargs,
     ) -> list:
+        
+        # Note that for ShareGPT, we enforce model_id
+        assert self.model_id is not None, "ModelID cannot be None for sharegpt"
+        from transformers import AutoConfig
+        config = AutoConfig.from_pretrained(self.model_id)
+        print(f"Model: {self.model_id}, max position embedding: {config.max_position_embeddings}")
+        
         samples: list = []
         ind = 0
         for entry in self.data:
@@ -1269,8 +1278,11 @@ class ShareGPTDataset(BenchmarkDataset):
                 prompt_len,
                 new_output_len,
                 skip_min_output_len_check=output_len is not None,
+                max_total_len=config.max_position_embeddings,
+                max_prompt_len=config.max_position_embeddings,
             ):
                 continue
+            
             if image_path := entry.get("image"):
                 mm_content = process_image(image_path)
             elif video_path := entry.get("video"):
@@ -1868,6 +1880,7 @@ def get_samples(args, tokenizer: TokenizerLike) -> list[SampleRequest]:
                 random_seed=args.seed,
                 dataset_path=args.dataset_path,
                 disable_shuffle=args.disable_shuffle,
+                model_id=args.model
             ).sample(
                 tokenizer=tokenizer,
                 num_requests=args.num_prompts,
