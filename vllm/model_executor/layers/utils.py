@@ -437,6 +437,11 @@ _CPU_SGL_GEMM_MAX_WEIGHT_BYTES = 1 * 1024 * 1024
 
 
 def check_cpu_sgl_kernel(n: int, k: int, dtype: torch.dtype) -> bool:
+    # A build without CPU kernels, such as VLLM_TARGET_DEVICE=empty, lacks the
+    # packing op. Upstream checks only the CPU (v0.34.0); remove this check when
+    # it guards the op as _supports_onednn does.
+    if not hasattr(torch.ops._C, "convert_weight_packed"):
+        return False
     if not torch.cpu._is_amx_tile_supported() or dtype not in (
         torch.bfloat16,
         torch.float16,
